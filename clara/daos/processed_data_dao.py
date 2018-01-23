@@ -20,6 +20,32 @@ class ProcessedDataDAO(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.db_client.close()
 
+    def close(self):
+        self.db_client.close()
+
+    @retry(AutoReconnect, tries=5, delay=1, backoff=2)
+    def get_states(self, ticks_type, starting_from=None, limit=None):
+        """
+        :param ticks_type: ticks type, should be in format:
+                <bittrex-interval><base_coin_symbol><quote_coin_symbol>; i.e: oneMinBTCOMG
+        :param starting_from: starting date given in the date object
+        :param limit: returns the <limit> number of earliest states
+        :return: states retrieved from the database
+        """
+        states_collection = self.database[ticks_type]
+        if starting_from is None and limit is None:
+            return list(states_collection.find({}, {'_id': False}))
+
+        if limit is None:
+            return list(states_collection.find({TIMESPAN_LABEL: {'$gte': starting_from}}, {'_id': False}))
+
+        if starting_from is None:
+            return list(states_collection.find({'_id': False}).sort({TIMESPAN_LABEL: 1}).limit(limit))
+
+        return list(states_collection.find({TIMESPAN_LABEL: {'$gte': starting_from}}, {'_id': False})
+                    .sort({TIMESPAN_LABEL: 1})
+                    .limit(limit))
+
     @retry(AutoReconnect, tries=5, delay=1, backoff=2)
     def save_states(self, states, ticks_type):
         """
@@ -55,3 +81,8 @@ class ProcessedDataDAO(object):
             return None
 
         return db_response.next()[TIMESPAN_LABEL]
+
+    @retry(AutoReconnect, tries=5, delay=1, backoff=2)
+    def get_all_tick_types_for_interval(self, interval):
+        collection_names = self.database.collection_names()
+        return [name for name in collection_names if interval in name]

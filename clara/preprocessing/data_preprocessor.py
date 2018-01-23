@@ -1,5 +1,6 @@
 import re
 import itertools
+from bittrex.apis.bittrex_api import Interval
 from bittrex.apis.bittrex_api import OPEN_LABEL, HIGH_LABEL, LOW_LABEL, \
     CLOSE_LABEL, VOLUME_LABEL, TIMESPAN_LABEL, BASE_VOLUME_LABEL
 from bittrex.daos.bittrex_dao import BittrexDAO
@@ -28,22 +29,22 @@ def update_preprocessed_data(raw_data_db_uri, marketsset_collection, intervals, 
 
 
 def _get_preprocess_and_save_ticks(market_name, interval, bittrex_dao, processed_data_dao):
-    if interval != 'oneMin':
-        raise InvalidTicksException('Preprocessing doesn work for ticks with interval different than oneMin. '
-                                    'TODO figure it out')  # TODO
+    try:
+        interval_value = Interval[interval].value
+    except KeyError:
+        raise InvalidTicksException('Invalid ticks interval: {}'.format(interval))
 
     ticks_type = interval + re.sub(r'\W+', '', market_name)
     latest_processed_timespan = processed_data_dao.get_latest_state_timespan(ticks_type)
     print('last updated entry for {} for {} interval is from {}'
           .format(market_name, interval, str(latest_processed_timespan)))
     if latest_processed_timespan:
-        # TODO look at the exception at the top of the function
-        earliest_timespan_needed = latest_processed_timespan - timedelta(minutes=1*(STATE_SIZE + EMA_SIZE))
+        earliest_timespan_needed = latest_processed_timespan - timedelta(minutes=interval_value*(STATE_SIZE + EMA_SIZE))
         raw_ticks = bittrex_dao.get_ticks(ticks_type, starting_from=earliest_timespan_needed)
     else:
         raw_ticks = bittrex_dao.get_ticks(ticks_type)
 
-    raw_ticks = fill_empty_timespans(raw_ticks, 1)  # TODO look at the exception at the top of the function
+    raw_ticks = fill_empty_timespans(raw_ticks, interval_value)
     states = convert_ticks_to_states(raw_ticks)
     if not states:
         print('data for {} for {} is up to date'.format(market_name, interval))
