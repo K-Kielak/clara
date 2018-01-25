@@ -6,7 +6,7 @@ from bittrex.apis.bittrex_api import OPEN_LABEL, HIGH_LABEL, LOW_LABEL, \
 from bittrex.daos.bittrex_dao import BittrexDAO
 from bittrex.invalid_ticks_exception import InvalidTicksException
 from clara.daos.processed_data_dao import ProcessedDataDAO
-from clara.daos.processed_data_dao import TICKS_LABEL
+from clara.daos.processed_data_dao import EMA_LABEL, TICKS_LABEL
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
@@ -72,7 +72,6 @@ def fill_empty_timespans(ticks, interval):
 
         if time_difference > interval:
             filler_tick = {
-
                 OPEN_LABEL: ticks[i][CLOSE_LABEL],
                 HIGH_LABEL: ticks[i][CLOSE_LABEL],
                 LOW_LABEL: ticks[i][CLOSE_LABEL],
@@ -106,6 +105,7 @@ def convert_ticks_to_states(ticks):
         state_ticks = convert_ticks_to_state_ticks(ticks[i+EMA_SIZE:i+ticks_needed_for_one_state], ema)
         state = {
             TIMESPAN_LABEL: ticks[i+ticks_needed_for_one_state][TIMESPAN_LABEL],
+            EMA_LABEL: ema,
             TICKS_LABEL: state_ticks
         }
         states.append(state)

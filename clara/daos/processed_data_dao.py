@@ -5,6 +5,7 @@ from pymongo.errors import AutoReconnect
 from pymongo.errors import BulkWriteError
 from retry import retry
 
+EMA_LABEL = 'EMA'
 TICKS_LABEL = 'Ticks'
 
 
