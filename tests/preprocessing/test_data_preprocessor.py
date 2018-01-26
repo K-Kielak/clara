@@ -1,15 +1,12 @@
 import datetime
 import math
-from random import random
-
 import pytest
-from clara.daos.processed_data_dao import TICKS_LABEL
-
+from bittrex.invalid_ticks_exception import InvalidTicksException
 from bittrex.apis.bittrex_api import OPEN_LABEL, HIGH_LABEL, LOW_LABEL, \
     CLOSE_LABEL, VOLUME_LABEL, TIMESPAN_LABEL, BASE_VOLUME_LABEL
-from bittrex.invalid_ticks_exception import InvalidTicksException
 from clara.preprocessing import data_preprocessor
-from clara.preprocessing.data_preprocessor import STATE_SIZE, EMA_SIZE
+from clara.preprocessing.data_preprocessor import STATE_SIZE, EMA_SIZE, TICKS_LABEL
+from random import random
 from tests.preprocessing.mock_data import one_min_ticks_with_gaps, filled_one_min_ticks_with_gaps, \
     fifteen_min_ticks_with_gaps, filled_fifteen_min_ticks_with_gaps, invalid_two_min_ticks, same_ticks, \
     same_state_ticks, different_ticks, different_state_ticks
