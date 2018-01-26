@@ -53,30 +53,30 @@ class Environment(object):
     def make_action(self, new_agent_position):
         reward = 0
 
-        # process action
+        # process action ###
         current_coin_price = self._get_current_price()
         # apply transaction fees and update coin_price_at_last_change)
         if self.current_agent_position.exits_trade(new_agent_position):
             coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_change
-            percantage_change_over_trade = 100 * (coin_price_change_over_trade / self.coin_price_at_last_change)
-            reward -= (100 + percantage_change_over_trade) * self.exchange_transaction_fee
+            percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_change
+            reward -= (100 + percentage_change_over_trade) * self.exchange_transaction_fee
             self.coin_price_at_last_change = current_coin_price
 
         if self.current_agent_position.enters_trade(new_agent_position):
-            self.coin_price_at_last_change = current_coin_price
             reward -= 100 * self.exchange_transaction_fee
+            self.coin_price_at_last_change = current_coin_price
 
-        # update agent and the market
+        # update agent and the market ###
         self.current_agent_position = new_agent_position
         self.loaded_market_data.popleft()
         previous_coin_price = current_coin_price
         current_coin_price = self._get_current_price()
 
-        # process new state consequences
+        # process new state consequences ###
         coin_price_change = current_coin_price - previous_coin_price
-        percantage_change = 100 * (coin_price_change / self.coin_price_at_last_change)
+        percentage_change = (100 * coin_price_change) / self.coin_price_at_last_change
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
-        reward += self.current_agent_position.value * percantage_change
+        reward += self.current_agent_position.value * percentage_change
         following_state_vector = self.get_curr_state_vector()
 
         if len(self.loaded_market_data) == 1:
@@ -112,7 +112,7 @@ class Environment(object):
             self._increment_tick_type_index()
 
         if len(self.loaded_market_data) <= 1:
-            self._increment_tick_type_index()
+            self._update_market_data_batch()
 
     def _increment_tick_type_index(self):
         self.current_tick_type_index += 1
