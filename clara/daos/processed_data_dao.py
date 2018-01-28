@@ -41,10 +41,10 @@ class ProcessedDataDAO(object):
             return list(states_collection.find({TIMESPAN_LABEL: {'$gte': starting_from}}, {'_id': False}))
 
         if starting_from is None:
-            return list(states_collection.find({'_id': False}).sort({TIMESPAN_LABEL: 1}).limit(limit))
+            return list(states_collection.find({}, {'_id': False}).sort(TIMESPAN_LABEL, pymongo.ASCENDING).limit(limit))
 
         return list(states_collection.find({TIMESPAN_LABEL: {'$gte': starting_from}}, {'_id': False})
-                    .sort({TIMESPAN_LABEL: 1})
+                    .sort(TIMESPAN_LABEL, pymongo.ASCENDING)
                     .limit(limit))
 
     @retry(AutoReconnect, tries=5, delay=1, backoff=2)

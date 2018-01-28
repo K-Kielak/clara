@@ -5,16 +5,18 @@ from clara.agent.position import Position
 
 class DQN(object):
     def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
-        self._online_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
-        self._target_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
-        online_output, online_weights, online_biases = _create_dqn_model(state_vector_size, layer_sizes, outputs)
-        target_output, target_weights, target_biases = _create_dqn_model(state_vector_size, layer_sizes, outputs)
+        self._online_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
+        self._target_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
+        online_output, online_weights, online_biases = \
+            _create_dqn_model(self._online_state_vectors, layer_sizes, outputs)
+        target_output, target_weights, target_biases = \
+            _create_dqn_model(self._target_state_vectors, layer_sizes, outputs)
 
         action_indices = tf.argmax(online_output, 1)
         self._action_vectors = tf.one_hot(action_indices, outputs)
 
         online_max_q_values = tf.reduce_max(online_output, axis=1)
-        self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float64)
+        self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float32)
         next_state_target_max_q_value = tf.reduce_max(target_output, axis=1)
         target_max_q_values = self._immediate_rewards + tf.scalar_mul(discount_rate, next_state_target_max_q_value)
         td_errors = tf.square(online_max_q_values - target_max_q_values)
@@ -28,23 +30,22 @@ class DQN(object):
             self._copy_online_to_target_ops.append(target_biases[i].assign(bias))
 
     def train(self, train_batch):
-        train_batch = np.array(train_batch)
         self._train_step.run(feed_dict={
-            self._online_state_vectors: train_batch[:, 0],  # [:, 1] takes state that agent saw before making the action
-            self._immediate_rewards: train_batch[:, 2],  # [:, 2] takes immediate reward following the action
-            self._target_state_vectors: train_batch[:, 3]  # [:, 3] takes state following the action
+            self._online_state_vectors: np.vstack(train_batch[:, 0]),  # [:, 1] takes state that agent saw before making the action
+            self._immediate_rewards: np.squeeze(train_batch[:, 2]),  # [:, 2] takes immediate reward following the action
+            self._target_state_vectors: np.vstack(train_batch[:, 3])  # [:, 3] takes state following the action
         })
 
     def get_online_network_output(self, state):
         action_vector = self._action_vectors.eval(feed_dict={self._online_state_vectors: [state]})
-        return Position(action_vector[0])
+        return Position(action_vector[0].tolist())
 
     def copy_online_to_target(self, session):
         for op in self._copy_online_to_target_ops:
             session.run(op)
 
 
-def _create_dqn_model(state_vector_size, layers_sizes, outputs):
+def _create_dqn_model(state_vectors, layers_sizes, outputs):
     """
     Takes DQN hyperparameters and creates tensorflow model for it
     :param state_placeholder: tensorflow placeholders for input state
@@ -53,9 +54,9 @@ def _create_dqn_model(state_vector_size, layers_sizes, outputs):
     :param outputs: number of outputs for DQN, each output corresponds to separate action
     :return: tensorflow model of DQN that can be used for training and later for prediction
     """
-    weights = _initialize_random_weights(state_vector_size, layers_sizes, outputs)
+    weights = _initialize_random_weights(state_vectors.shape.as_list()[1], layers_sizes, outputs)
     biases = _initialize_random_biases(layers_sizes, outputs)
-    return _model_output(state_vector_size, weights, biases)
+    return _model_output(state_vectors, weights, biases)
 
 
 def _model_output(input, weights, biases):

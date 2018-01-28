@@ -10,7 +10,7 @@ from collections import deque
 class Environment(object):
     # How many states in the future to load from the database
     # (the higher value the more RAM is required, the lower the slower getting the data will be)
-    MAX_BATCH_SIZE = 50000  # 50000 ~= 0.8GB
+    MAX_BATCH_SIZE = 25000  # 50000 ~= 0.4GB
 
     def __init__(self, market_interval, db_uri, exchange_transaction_fee):
         self.dao = ProcessedDataDAO(db_uri)
@@ -23,14 +23,15 @@ class Environment(object):
             raise ValueError('There are no states for given market_interval ({}) '
                              'in the database'.format(market_interval))
         self.current_tick_type_index = 0
+        print('starting market is ' + self.tick_types[self.current_tick_type_index])
 
         self.exchange_transaction_fee = exchange_transaction_fee
         self.loaded_market_data = deque()
-        # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
-        self.coin_price_at_last_change = 0
         self.current_agent_position = Position.IDLE
 
         self._update_market_data_batch()
+        # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
+        self.coin_price_at_last_change = self._get_current_price()
 
     def __enter__(self):
         return self
@@ -41,12 +42,10 @@ class Environment(object):
     def get_curr_state_vector(self):
         current_state = self.loaded_market_data[0]
         ticks = current_state[TICKS_LABEL]
-        state_vector = deque()
+        state_vector = [current_state[EMA_LABEL]]
         for t in ticks:
-            for _, value in t:
-                state_vector.append(value)
+            state_vector.extend(t.values())
 
-        state_vector.appendleft(current_state[EMA_LABEL])
         state_vector.extend(self.current_agent_position.value)
         return state_vector
 
@@ -110,6 +109,7 @@ class Environment(object):
         # if result is not full it means that the data for the current market has ended
         if len(self.loaded_market_data) < Environment.MAX_BATCH_SIZE:
             self._increment_tick_type_index()
+            print('market finished and changed to ' + str(self.tick_types[self.current_tick_type_index]))
 
         if len(self.loaded_market_data) <= 1:
             self._update_market_data_batch()
