@@ -1,7 +1,50 @@
+import numpy as np
 import tensorflow as tf
+from clara.agent.position import Position
 
 
-def create_dqn_model(state_placeholder, layers_sizes, outputs):
+class DQN(object):
+    def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
+        self._online_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
+        self._target_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
+        online_output, online_weights, online_biases = _create_dqn_model(state_vector_size, layer_sizes, outputs)
+        target_output, target_weights, target_biases = _create_dqn_model(state_vector_size, layer_sizes, outputs)
+
+        action_indices = tf.argmax(online_output, 1)
+        self._action_vectors = tf.one_hot(action_indices, outputs)
+
+        online_max_q_values = tf.reduce_max(online_output, axis=1)
+        self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float64)
+        next_state_target_max_q_value = tf.reduce_max(target_output, axis=1)
+        target_max_q_values = self._immediate_rewards + tf.scalar_mul(discount_rate, next_state_target_max_q_value)
+        td_errors = tf.square(online_max_q_values - target_max_q_values)
+        loss_function = tf.reduce_sum(td_errors)
+        self._train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss_function)
+
+        self._copy_online_to_target_ops = []
+        for i, weights in enumerate(online_weights):
+            self._copy_online_to_target_ops.append(target_weights[i].assign(weights))
+        for i, bias in enumerate(online_biases):
+            self._copy_online_to_target_ops.append(target_biases[i].assign(bias))
+
+    def train(self, train_batch):
+        train_batch = np.array(train_batch)
+        self._train_step.run(feed_dict={
+            self._online_state_vectors: train_batch[:, 0],  # [:, 1] takes state that agent saw before making the action
+            self._immediate_rewards: train_batch[:, 2],  # [:, 2] takes immediate reward following the action
+            self._target_state_vectors: train_batch[:, 3]  # [:, 3] takes state following the action
+        })
+
+    def get_online_network_output(self, state):
+        action_vector = self._action_vectors.eval(feed_dict={self._online_state_vectors: [state]})
+        return Position(action_vector[0])
+
+    def copy_online_to_target(self, session):
+        for op in self._copy_online_to_target_ops:
+            session.run(op)
+
+
+def _create_dqn_model(state_vector_size, layers_sizes, outputs):
     """
     Takes DQN hyperparameters and creates tensorflow model for it
     :param state_placeholder: tensorflow placeholders for input state
@@ -10,9 +53,9 @@ def create_dqn_model(state_placeholder, layers_sizes, outputs):
     :param outputs: number of outputs for DQN, each output corresponds to separate action
     :return: tensorflow model of DQN that can be used for training and later for prediction
     """
-    weights = _initialize_random_weights(state_placeholder, layers_sizes, outputs)
+    weights = _initialize_random_weights(state_vector_size, layers_sizes, outputs)
     biases = _initialize_random_biases(layers_sizes, outputs)
-    return _model_output(state_placeholder, weights, biases)
+    return _model_output(state_vector_size, weights, biases)
 
 
 def _model_output(input, weights, biases):
@@ -33,13 +76,13 @@ def _model_output(input, weights, biases):
     return output, weights, biases
 
 
-def _initialize_random_weights(state_placeholder, layers_sizes, outputs):
-    weights = [_generate_random_weights([len(state_placeholder), layers_sizes[0]])]
+def _initialize_random_weights(state_vector_size, layers_sizes, outputs):
+    weights = [_generate_random_weights([state_vector_size, layers_sizes[0]])]
 
     for i in range(1, len(layers_sizes)):
         weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]]))
 
-    weights.append(_generate_random_weights([layers_sizes[len(layers_sizes) - 1], outputs]))
+    weights.append(_generate_random_weights([layers_sizes[-1], outputs]))
     return weights
 
 

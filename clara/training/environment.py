@@ -47,7 +47,7 @@ class Environment(object):
                 state_vector.append(value)
 
         state_vector.appendleft(current_state[EMA_LABEL])
-        state_vector.append(self.current_agent_position.value)
+        state_vector.extend(self.current_agent_position.value)
         return state_vector
 
     def make_action(self, new_agent_position):
@@ -76,7 +76,7 @@ class Environment(object):
         coin_price_change = current_coin_price - previous_coin_price
         percentage_change = (100 * coin_price_change) / self.coin_price_at_last_change
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
-        reward += self.current_agent_position.value * percentage_change
+        reward += self.current_agent_position.get_multiplier() * percentage_change
         following_state_vector = self.get_curr_state_vector()
 
         if len(self.loaded_market_data) == 1:
