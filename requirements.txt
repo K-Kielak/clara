@@ -1,7 +1,9 @@
+absl-py==0.1.9
 attrs==17.4.0
 bleach==1.5.0
 decorator==4.2.1
 enum34==1.1.6
+futures==3.1.1
 html5lib==0.9999999
 Markdown==2.6.11
 numpy==1.14.0
@@ -10,8 +12,9 @@ protobuf==3.5.1
 py==1.5.2
 pymongo==3.6.0
 pytest==3.3.2
+python-dateutil==2.6.1
 retry==0.9.2
 six==1.11.0
-tensorflow==1.4.1
-tensorflow-tensorboard==0.4.0
+tensorflow==1.5.0
+tensorflow-tensorboard==1.5.0
 Werkzeug==0.14.1
