@@ -31,7 +31,7 @@ class Environment(object):
 
         self._update_market_data_batch()
         # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
-        self.coin_price_at_last_change = self._get_current_price()
+        self.coin_price_at_last_entry = self._get_current_price()
 
     def __enter__(self):
         return self
@@ -56,14 +56,16 @@ class Environment(object):
         current_coin_price = self._get_current_price()
         # apply transaction fees and update coin_price_at_last_change)
         if self.current_agent_position.exits_trade(new_agent_position):
-            coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_change
-            percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_change
-            reward -= (100 + percentage_change_over_trade) * self.exchange_transaction_fee
-            self.coin_price_at_last_change = current_coin_price
+            coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
+            percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
+            percentage_earned_over_trade = self.current_agent_position.get_multiplier() * percentage_change_over_trade
+            total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade)
+            total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
+            reward -= total_fee
 
         if self.current_agent_position.enters_trade(new_agent_position):
-            reward -= 100 * self.exchange_transaction_fee
-            self.coin_price_at_last_change = current_coin_price
+            reward -= self.exchange_transaction_fee
+            self.coin_price_at_last_entry = current_coin_price
 
         # update agent and the market ###
         self.current_agent_position = new_agent_position
@@ -73,7 +75,7 @@ class Environment(object):
 
         # process new state consequences ###
         coin_price_change = current_coin_price - previous_coin_price
-        percentage_change = (100 * coin_price_change) / self.coin_price_at_last_change
+        percentage_change = (100 * coin_price_change) / self.coin_price_at_last_entry
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
         reward += self.current_agent_position.get_multiplier() * percentage_change
         following_state_vector = self.get_curr_state_vector()
@@ -106,12 +108,9 @@ class Environment(object):
         # and change list to deque for efficiency reasons
         self.loaded_market_data = deque(states)
 
-        # if result is not full it means that the data for the current market has ended
-        if len(self.loaded_market_data) < Environment.MAX_BATCH_SIZE:
-            self._increment_tick_type_index()
-            print('market finished and changed to ' + str(self.tick_types[self.current_tick_type_index]))
-
         if len(self.loaded_market_data) <= 1:
+            self._increment_tick_type_index()
+            print('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
             self._update_market_data_batch()
 
     def _increment_tick_type_index(self):

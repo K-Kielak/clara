@@ -9,15 +9,29 @@ class Memory(object):
     def __init__(self, memory_size):
         self.experiences = deque()
         self.memory_size = memory_size
+        self.samples_given = 0
 
-    def add(self, experience):
-        if len(self.experiences) < self.memory_size:
-            self.experiences.append(experience)
-            return
+    def add(self, initial_state, action, reward, following_state):
+        experience = np.array([initial_state, action, reward, following_state])
+        self.experiences.append(experience)
 
-        self.experiences.popleft()
-        self.experiences.append(np.reshape(experience, [1, Memory.EXPERIENCE_SIZE]))
+        if len(self.experiences) > self.memory_size:
+            self.experiences.popleft()
 
     def get_samples(self, sample_size):
         samples = random.sample(self.experiences, sample_size)
-        return np.reshape(samples, [sample_size, Memory.EXPERIENCE_SIZE])
+        try:
+            self.samples_given += 1
+            return np.reshape(samples, [sample_size, Memory.EXPERIENCE_SIZE])
+        except ValueError:
+            print(self.samples_given)
+            print(len(samples))
+            for s in samples:
+                try:
+                    print(len(s))
+                    print(len(s[0]))
+                    print(s[1])
+                    print(s[2])
+                    print(len(s[3]))
+                except IndexError:
+                    print(s)
