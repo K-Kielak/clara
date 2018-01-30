@@ -11,7 +11,7 @@ STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to 
 LAYERS_SIZES = [600, 400]
 MEMORY_SIZE = 500000  # How many experiences to keep in the memory; 250000 ~= 4GB
 
-PRE_TRAIN_STEPS = 50000  # How many steps of random actions before training begins
+PRE_TRAIN_STEPS = 500000  # How many steps of random actions before training begins
 TRAINING_BATCH_SIZE = 50  # How many experiences to use for each training step
 TRAINING_FREQUENCY = 5  # How many actions before performing one training step
 NUM_STEPS = 7000000  # How many steps to perform for training session
@@ -55,6 +55,10 @@ def main():
 
         print('pre train steps finished, starting proper trainig')
         # proper training
+        total_reward = 0
+        last_total_reward = 0
+        last_trades_so_far = 0
+        last_average_trade_profitability = 0
         for i in range(NUM_STEPS):
             initial_state = environment.get_curr_state_vector()
             if random.random() < EPS:
@@ -63,6 +67,7 @@ def main():
                 action = dqn.get_online_network_output(initial_state)
 
             reward, following_state = environment.make_action(action)
+            total_reward += reward
             experience_memory.add(initial_state, action, reward, following_state)
 
             # update online DQN
@@ -73,6 +78,31 @@ def main():
             # copy online DQN parameters to the target DQN
             if i % (TRAINING_FREQUENCY * TARGET_UPDATE_FREQUENCY) == 0:
                 dqn.copy_online_to_target(sess)
+
+            # print training stats
+            if i % TRAINING_STATS_FREQUENCY == 0:
+                print('\n')
+                print('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
+                print('Total reward so far: {}'.format(total_reward))
+                print('Average total reward: {}'.format(total_reward / i))
+                new_reward = total_reward - last_total_reward
+                print('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
+                print('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                                                                         new_reward / TRAINING_STATS_FREQUENCY))
+                last_total_reward = total_reward
+
+                print('Trades so far: {}'.format(environment.trades_so_far))
+                print('Trades over last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                                                             environment.trades_so_far - last_trades_so_far))
+
+                print('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
+                total_profitability = environment.average_trade_profitability * environment.trades_so_far
+                last_total_profitability = last_average_trade_profitability * \
+                                           (environment.trades_so_far - TRAINING_STATS_FREQUENCY)
+                new_average_profitability = (total_profitability - last_total_profitability) / TRAINING_STATS_FREQUENCY
+                print('Average profitability over last {} trades: {}'.format(TRAINING_STATS_FREQUENCY
+                                                                             , new_average_profitability))
+                last_average_trade_profitability = environment.average_trade_profitability
 
 
 if __name__ == '__main__':

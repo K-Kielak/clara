@@ -33,6 +33,9 @@ class Environment(object):
         # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
         self.coin_price_at_last_entry = self._get_current_price()
 
+        self.average_trade_profitability = 0
+        self.trades_so_far = 0
+
     def __enter__(self):
         return self
 
@@ -59,9 +62,14 @@ class Environment(object):
             coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
             percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
             percentage_earned_over_trade = self.current_agent_position.get_multiplier() * percentage_change_over_trade
-            total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade)
+            total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade) / 100
             total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
             reward -= total_fee
+
+            self.trades_so_far += 1
+            trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
+            distance_from_average = trade_profitability - self.average_trade_profitability
+            self.average_trade_profitability += distance_from_average / self.trades_so_far
 
         if self.current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
