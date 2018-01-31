@@ -1,3 +1,4 @@
+import logging
 from bittrex.apis.bittrex_api import Interval
 from bittrex.apis.bittrex_api import CLOSE_LABEL
 from bittrex.invalid_ticks_exception import InvalidTicksException
@@ -23,7 +24,7 @@ class Environment(object):
             raise ValueError('There are no states for given market_interval ({}) '
                              'in the database'.format(market_interval))
         self.current_tick_type_index = 0
-        print('starting market is ' + self.tick_types[self.current_tick_type_index])
+        logging.info('starting market is ' + self.tick_types[self.current_tick_type_index])
 
         self.exchange_transaction_fee = exchange_transaction_fee
         self.loaded_market_data = deque()
@@ -53,6 +54,11 @@ class Environment(object):
         return state_vector
 
     def make_action(self, new_agent_position):
+        # data needed for logging
+        start_timespan = self.loaded_market_data[0][TIMESPAN_LABEL]
+        end_timespan = self.loaded_market_data[1][TIMESPAN_LABEL]
+        starting_position = self.current_agent_position
+
         reward = 0
 
         # process action ###
@@ -91,6 +97,11 @@ class Environment(object):
         if len(self.loaded_market_data) == 1:
             self._update_market_data_batch(last_state=self.loaded_market_data[0])
 
+        if abs(reward) > 5:
+            logging.warning('From {} to {}'.format(start_timespan, end_timespan))
+            logging.warning('Unusual reward: {}'.format(reward))
+            logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
+
         return reward, following_state_vector
 
     def _get_current_price(self,):
@@ -118,7 +129,7 @@ class Environment(object):
 
         if len(self.loaded_market_data) <= 1:
             self._increment_tick_type_index()
-            print('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
+            logging.info('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
             self.current_agent_position = Position.IDLE  # reset the agent when changing the market
             self._update_market_data_batch()
 

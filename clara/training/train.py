@@ -65,7 +65,7 @@ def main():
             reward, following_state = environment.make_action(action)
             experience_memory.add(initial_state, action, reward, following_state)
 
-        logging.info('pre train steps finished, starting proper trainig')
+        logging.info('Pre train steps finished, starting proper training')
         # proper training
         total_reward = 0
         last_total_reward = 0
@@ -98,7 +98,6 @@ def main():
 
             # print training stats
             if i % TRAINING_STATS_FREQUENCY == 0:
-                logging.info('\n')
                 logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
                 logging.info('Total reward so far: {}'.format(total_reward))
                 logging.info('Average total reward: {}'.format(total_reward / (i + PRE_TRAIN_STEPS + 1)))
@@ -122,7 +121,7 @@ def main():
                 last_average_trade_profitability = environment.average_trade_profitability
                 last_trades_so_far = environment.trades_so_far
 
-                logging.info('Epsilon: {}'.format(epsilon))
+                logging.info('Epsilon: {}\n'.format(epsilon))
 
 
 if __name__ == '__main__':
