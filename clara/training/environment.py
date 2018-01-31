@@ -100,7 +100,7 @@ class Environment(object):
         if abs(reward) > 5:
             logging.warning('From {} to {}'.format(start_timespan, end_timespan))
             logging.warning('Unusual reward: {}'.format(reward))
-            logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
+            logging.warning('Starting from {} ending at {}\n'.format(starting_position, self.current_agent_position))
 
         return reward, following_state_vector
 

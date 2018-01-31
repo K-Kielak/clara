@@ -67,6 +67,10 @@ def main():
 
         logging.info('Pre train steps finished, starting proper training')
         # proper training
+        total_estimated_q = 0
+        last_estimated_q = 0
+        total_decisions_made = 0
+        last_descisions_made = 0
         total_reward = 0
         last_total_reward = 0
         last_trades_so_far = 0
@@ -81,7 +85,9 @@ def main():
             if random.random() < epsilon:
                 action = random.choice(list(Position))
             else:
-                action = dqn.get_online_network_output(initial_state)
+                action, estimated_q = dqn.get_online_network_output(initial_state)
+                total_estimated_q += estimated_q
+                total_decisions_made += 1
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
@@ -99,28 +105,36 @@ def main():
             # print training stats
             if i % TRAINING_STATS_FREQUENCY == 0:
                 logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
+
                 logging.info('Total reward so far: {}'.format(total_reward))
                 logging.info('Average total reward: {}'.format(total_reward / (i + PRE_TRAIN_STEPS + 1)))
                 new_reward = total_reward - last_total_reward
                 logging.info('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
                 logging.info('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
-                                                                         new_reward / TRAINING_STATS_FREQUENCY))
+                                                                                new_reward / TRAINING_STATS_FREQUENCY))
                 last_total_reward = total_reward
 
                 logging.info('Trades so far: {}'.format(environment.trades_so_far))
                 logging.info('Trades over last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
-                                                             environment.trades_so_far - last_trades_so_far))
+                                                                    environment.trades_so_far - last_trades_so_far))
                 logging.info('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
                 total_profitability = environment.average_trade_profitability * environment.trades_so_far
                 last_total_profitability = last_average_trade_profitability * \
                                            (environment.trades_so_far - last_trades_so_far)
                 new_average_profitability = (total_profitability - last_total_profitability) / \
-                                           (environment.trades_so_far - last_trades_so_far)
+                                            (environment.trades_so_far - last_trades_so_far)
                 logging.info('Average profitability over last {} trades: {}'
-                      .format((environment.trades_so_far - last_trades_so_far), new_average_profitability))
+                             .format((environment.trades_so_far - last_trades_so_far), new_average_profitability))
                 last_average_trade_profitability = environment.average_trade_profitability
                 last_trades_so_far = environment.trades_so_far
 
+                new_decisions_made = total_decisions_made - last_descisions_made + 1
+                new_estimated_q = total_estimated_q - last_estimated_q
+                logging.info('Average total estimated Q: {}'.format(total_estimated_q / (total_decisions_made + 1)))
+                logging.info('Average estimated Q over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                                                                                     new_estimated_q / new_decisions_made))
+                last_estimated_q = total_estimated_q
+                last_descisions_made = total_decisions_made
                 logging.info('Epsilon: {}\n'.format(epsilon))
 
 
