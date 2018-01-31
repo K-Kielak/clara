@@ -98,7 +98,7 @@ class Environment(object):
         ema = current_state[EMA_LABEL]
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
-        current_price = ema*(current_price + 1)
+        current_price = ema*(current_price + 100)
         return current_price
 
     def _update_market_data_batch(self, last_state=None):
