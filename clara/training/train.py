@@ -1,10 +1,16 @@
+import logging
 import os
 import random
+import sys
 import tensorflow as tf
 from clara.agent.position import Position
 from clara.agent.deep_q_network import DQN
 from clara.agent.experience_memory import Memory
 from clara.training.environment import Environment
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(message)s',
+                    handlers=[logging.FileHandler('training.log'), logging.StreamHandler(sys.stdout)])
 
 OUTPUTS = 3  # Three values for 3 different actions
 STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to represent the previous action
@@ -20,7 +26,7 @@ TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats pr
 
 DISCOUNT_RATE = 0.9999  # Discount factor on the future, expected Q values
 LEARNING_RATE = 0.001  # Learning rate of the DQN
-START_EPS = 0.1  # Starting probability of choosing random action by the agent to explore the environment
+START_EPS = 0.5  # Starting probability of choosing random action by the agent to explore the environment
 END_EPS = 0.01  # Ending probability of choosing random action by the agent to explore the environment
 ANNEALING_STEPS = 2000000  # How many steps of training to reduce START_EPS to END_EPS
 
@@ -35,18 +41,22 @@ if STATES_DB_URI_ENV not in os.environ:
 
 
 def main():
+    logging.info('New training session starting')
+    logging.info('.')
+    logging.info('.')
+    logging.info('.')
     # initialize agent
     dqn = DQN(STATE_SIZE, LAYERS_SIZES, OUTPUTS, LEARNING_RATE, DISCOUNT_RATE)
     experience_memory = Memory(MEMORY_SIZE)
-    print('Agent initialized')
+    logging.info('Agent initialized')
 
     # initialize environment
     states_db_uri = os.environ[STATES_DB_URI_ENV]
     environment = Environment(MARKET_INTERVAL, states_db_uri, EXCHANGE_TRANSACTION_FEE)
-    print('Environment initialized')
+    logging.info('Environment initialized')
 
     with tf.Session() as sess:
-        print('Starting training session...')
+        logging.info('Starting training session...')
         sess.run(tf.global_variables_initializer())
         # pre-training random steps to gather initial experience
         for _ in range(PRE_TRAIN_STEPS):
@@ -55,7 +65,7 @@ def main():
             reward, following_state = environment.make_action(action)
             experience_memory.add(initial_state, action, reward, following_state)
 
-        print('pre train steps finished, starting proper trainig')
+        logging.info('pre train steps finished, starting proper trainig')
         # proper training
         total_reward = 0
         last_total_reward = 0
@@ -88,31 +98,31 @@ def main():
 
             # print training stats
             if i % TRAINING_STATS_FREQUENCY == 0:
-                print('\n')
-                print('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
-                print('Total reward so far: {}'.format(total_reward))
-                print('Average total reward: {}'.format(total_reward / (i + PRE_TRAIN_STEPS + 1)))
+                logging.info('\n')
+                logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
+                logging.info('Total reward so far: {}'.format(total_reward))
+                logging.info('Average total reward: {}'.format(total_reward / (i + PRE_TRAIN_STEPS + 1)))
                 new_reward = total_reward - last_total_reward
-                print('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
-                print('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                logging.info('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
+                logging.info('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
                                                                          new_reward / TRAINING_STATS_FREQUENCY))
                 last_total_reward = total_reward
 
-                print('Trades so far: {}'.format(environment.trades_so_far))
-                print('Trades over last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                logging.info('Trades so far: {}'.format(environment.trades_so_far))
+                logging.info('Trades over last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
                                                              environment.trades_so_far - last_trades_so_far))
-                print('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
+                logging.info('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
                 total_profitability = environment.average_trade_profitability * environment.trades_so_far
                 last_total_profitability = last_average_trade_profitability * \
                                            (environment.trades_so_far - last_trades_so_far)
                 new_average_profitability = (total_profitability - last_total_profitability) / \
                                            (environment.trades_so_far - last_trades_so_far)
-                print('Average profitability over last {} trades: {}'
+                logging.info('Average profitability over last {} trades: {}'
                       .format((environment.trades_so_far - last_trades_so_far), new_average_profitability))
                 last_average_trade_profitability = environment.average_trade_profitability
                 last_trades_so_far = environment.trades_so_far
 
-                print('Epsilon: {}'.format(epsilon))
+                logging.info('Epsilon: {}'.format(epsilon))
 
 
 if __name__ == '__main__':
