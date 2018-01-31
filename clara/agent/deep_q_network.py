@@ -8,9 +8,9 @@ class DQN(object):
         self._online_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
         self._target_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
         online_output, online_weights, online_biases = \
-            _create_dqn_model(self._online_state_vectors, layer_sizes, outputs)
+            _create_dqn_model(self._online_state_vectors, layer_sizes, outputs, name='online')
         target_output, target_weights, target_biases = \
-            _create_dqn_model(self._target_state_vectors, layer_sizes, outputs)
+            _create_dqn_model(self._target_state_vectors, layer_sizes, outputs, trainable=False, name='target')
 
         action_indices = tf.argmax(online_output, 1)
         self._action_vectors = tf.one_hot(action_indices, outputs)
@@ -45,7 +45,7 @@ class DQN(object):
             session.run(op)
 
 
-def _create_dqn_model(state_vectors, layers_sizes, outputs):
+def _create_dqn_model(state_vectors, layers_sizes, outputs, trainable=True, name=None):
     """
     Takes DQN hyperparameters and creates tensorflow model for it
     :param state_placeholder: tensorflow placeholders for input state
@@ -54,8 +54,8 @@ def _create_dqn_model(state_vectors, layers_sizes, outputs):
     :param outputs: number of outputs for DQN, each output corresponds to separate action
     :return: tensorflow model of DQN that can be used for training and later for prediction
     """
-    weights = _initialize_random_weights(state_vectors.shape.as_list()[1], layers_sizes, outputs)
-    biases = _initialize_random_biases(layers_sizes, outputs)
+    weights = _initialize_random_weights(state_vectors.shape.as_list()[1], layers_sizes, outputs, trainable, name)
+    biases = _initialize_random_biases(layers_sizes, outputs, trainable, name)
     return _model_output(state_vectors, weights, biases)
 
 
@@ -77,29 +77,29 @@ def _model_output(input, weights, biases):
     return output, weights, biases
 
 
-def _initialize_random_weights(state_vector_size, layers_sizes, outputs):
-    weights = [_generate_random_weights([state_vector_size, layers_sizes[0]])]
+def _initialize_random_weights(state_vector_size, layers_sizes, outputs, trainable, name):
+    weights = [_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name)]
 
     for i in range(1, len(layers_sizes)):
-        weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]]))
+        weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
 
-    weights.append(_generate_random_weights([layers_sizes[-1], outputs]))
+    weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
     return weights
 
 
-def _generate_random_weights(size):
-    return tf.Variable(tf.truncated_normal(size, stddev=0.1))
+def _generate_random_weights(size, trainable, name):
+    return tf.Variable(tf.truncated_normal(size, stddev=0.1), trainable=trainable, name=name)
 
 
-def _initialize_random_biases(layers_sizes, outputs):
-    biases = [_generate_random_biases([layers_sizes[0]])]
+def _initialize_random_biases(layers_sizes, outputs, trainable, name):
+    biases = [_generate_random_biases([layers_sizes[0]], trainable, name)]
 
     for i in range(1, len(layers_sizes)):
-        biases.append(_generate_random_biases([layers_sizes[i]]))
+        biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
 
-    biases.append(_generate_random_biases([outputs]))
+    biases.append(_generate_random_biases([outputs], trainable, name))
     return biases
 
 
-def _generate_random_biases(size):
-    return tf.Variable(tf.truncated_normal(size, stddev=0.1, mean=0.2))
+def _generate_random_biases(size, trainable, name):
+    return tf.Variable(tf.truncated_normal(size, stddev=0.1, mean=0.2), trainable=trainable, name=name)
