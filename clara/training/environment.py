@@ -119,6 +119,7 @@ class Environment(object):
         if len(self.loaded_market_data) <= 1:
             self._increment_tick_type_index()
             print('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
+            self.current_agent_position = Position.IDLE  # reset the agent when changing the market
             self._update_market_data_batch()
 
     def _increment_tick_type_index(self):
