@@ -20,7 +20,9 @@ TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats pr
 
 DISCOUNT_RATE = 0.9999  # Discount factor on the future, expected Q values
 LEARNING_RATE = 0.001  # Learning rate of the DQN
-EPS = 0.1  # Probability of choosing random action by the agent to explore the environment
+START_EPS = 0.1  # Starting probability of choosing random action by the agent to explore the environment
+END_EPS = 0.01  # Ending probability of choosing random action by the agent to explore the environment
+ANNEALING_STEPS = 2000000  # How many steps of training to reduce START_EPS to END_EPS
 
 EXCHANGE_TRANSACTION_FEE = 0.1  # in percentage from transaction, e.g. 0.1 means 0.1%
 MARKET_INTERVAL = 'oneMin'  # On what type of market interval should agent be trained
@@ -59,9 +61,14 @@ def main():
         last_total_reward = 0
         last_trades_so_far = 0
         last_average_trade_profitability = 0
+        eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
+        epsilon = START_EPS
         for i in range(NUM_STEPS):
+            if i < ANNEALING_STEPS:
+                epsilon -= eps_drop
+
             initial_state = environment.get_curr_state_vector()
-            if random.random() < EPS:
+            if random.random() < epsilon:
                 action = random.choice(list(Position))
             else:
                 action = dqn.get_online_network_output(initial_state)
@@ -104,6 +111,8 @@ def main():
                       .format((environment.trades_so_far - last_trades_so_far), new_average_profitability))
                 last_average_trade_profitability = environment.average_trade_profitability
                 last_trades_so_far = environment.trades_so_far
+
+                print('Epsilon: {}'.format(epsilon))
 
 
 if __name__ == '__main__':
