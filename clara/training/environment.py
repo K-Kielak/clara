@@ -34,8 +34,10 @@ class Environment(object):
         # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
         self.coin_price_at_last_entry = self._get_current_price()
 
+        # data needed for logging
         self.average_trade_profitability = 0
         self.trades_so_far = 0
+        self.timespan_of_last_entry = None
 
     def __enter__(self):
         return self
@@ -80,6 +82,7 @@ class Environment(object):
         if self.current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
             self.coin_price_at_last_entry = current_coin_price
+            self.timespan_of_last_entry = self.loaded_market_data[0][TIMESPAN_LABEL]
 
         # update agent and the market ###
         self.current_agent_position = new_agent_position
@@ -97,10 +100,17 @@ class Environment(object):
         if len(self.loaded_market_data) == 1:
             self._update_market_data_batch(last_state=self.loaded_market_data[0])
 
-        if abs(reward) > 5:
+        if abs(reward) > 20:
+            logging.error('Reward ignored')
+            reward = 0
+
+        if abs(reward) > 10:
             logging.warning('From {} to {}'.format(start_timespan, end_timespan))
             logging.warning('Unusual reward: {}'.format(reward))
-            logging.warning('Starting from {} ending at {}\n'.format(starting_position, self.current_agent_position))
+            logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
+            logging.warning('Change in price: {} to {}'.format(previous_coin_price, current_coin_price))
+            logging.warning('Trade entered at {} with coin price: {}\n'.format(self.timespan_of_last_entry,
+                                                                               self.coin_price_at_last_entry))
 
         return reward, following_state_vector
 
@@ -110,6 +120,9 @@ class Environment(object):
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
         current_price = ema*(current_price + 100)
+        if current_price > 10 ** 4:  # TODO delete and inspect our data
+            current_price /= (10 ** 8)
+
         return current_price
 
     def _update_market_data_batch(self, last_state=None):
@@ -123,8 +136,7 @@ class Environment(object):
 
         states = self.dao.get_states(self.tick_types[self.current_tick_type_index],
                                      starting_from=new_batch_start_time, limit=Environment.MAX_BATCH_SIZE)
-        # get rid of timespans as Clara doesn't need the current time for trading
-        # and change list to deque for efficiency reasons
+
         self.loaded_market_data = deque(states)
 
         if len(self.loaded_market_data) <= 1:
