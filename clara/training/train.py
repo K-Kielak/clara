@@ -119,8 +119,7 @@ def main():
                                                                     environment.trades_so_far - last_trades_so_far))
                 logging.info('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
                 total_profitability = environment.average_trade_profitability * environment.trades_so_far
-                last_total_profitability = last_average_trade_profitability * \
-                                           (environment.trades_so_far - last_trades_so_far)
+                last_total_profitability = last_average_trade_profitability * last_trades_so_far
                 new_average_profitability = (total_profitability - last_total_profitability) / \
                                             (environment.trades_so_far - last_trades_so_far)
                 logging.info('Average profitability over last {} trades: {}'
