@@ -110,7 +110,7 @@ def main():
                 logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
 
                 logging.info('Total reward so far: {}'.format(total_reward))
-                logging.info('Average total reward: {}'.format(total_reward / (i + PRE_TRAIN_STEPS + 1)))
+                logging.info('Average total reward: {}'.format(total_reward / (i + 1)))
                 new_reward = total_reward - last_total_reward
                 logging.info('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
                 logging.info('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
