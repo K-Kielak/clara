@@ -52,7 +52,7 @@ class DQN(object):
     def get_online_network_output(self, state):
         action_vector = self._action_vectors.eval(feed_dict={self._curr_state_vectors: [state]})
         outputs = self.online_curr_output.eval(feed_dict={self._curr_state_vectors: [state]})
-        return Position(action_vector[0].tolist()), max(outputs[0])
+        return Position(action_vector[0].tolist()), outputs[0]
 
     def copy_online_to_target(self, session):
         for op in self._copy_online_to_target_ops:

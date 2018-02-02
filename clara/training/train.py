@@ -67,14 +67,16 @@ def main():
 
         logging.info('Pre train steps finished, starting proper training')
         # proper training
-        total_estimated_q = 0
-        last_estimated_q = 0
         total_decisions_made = 0
         last_descisions_made = 0
         total_reward = 0
         last_total_reward = 0
         last_trades_so_far = 0
         last_average_trade_profitability = 0
+        total_estimated_q = [0, 0, 0]
+        last_estimated_q = [0, 0, 0]
+        positions_count = [0, 0, 0]
+        last_positions_count = [0, 0, 0]
         eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
         epsilon = START_EPS
         for i in range(NUM_STEPS):
@@ -86,8 +88,9 @@ def main():
                 action = random.choice(list(Position))
             else:
                 action, estimated_q = dqn.get_online_network_output(initial_state)
-                total_estimated_q += estimated_q
+                total_estimated_q = [total_q + new_q for total_q, new_q in zip(total_estimated_q, estimated_q)]
                 total_decisions_made += 1
+                positions_count = [count + new_pos for count, new_pos in zip(positions_count, action.value)]
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
@@ -128,10 +131,18 @@ def main():
                 last_trades_so_far = environment.trades_so_far
 
                 new_decisions_made = total_decisions_made - last_descisions_made + 1
-                new_estimated_q = total_estimated_q - last_estimated_q
-                logging.info('Average total estimated Q: {}'.format(total_estimated_q / (total_decisions_made + 1)))
-                logging.info('Average estimated Q over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
-                                                                                     new_estimated_q / new_decisions_made))
+                new_estimated_q = [total_q - last_q for total_q, last_q in zip(total_estimated_q, last_estimated_q)]
+                logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
+                             .format([total_q / (total_decisions_made + 1) for total_q in total_estimated_q]))
+                logging.info('Average estimated Q over the last {} steps: {}'
+                             .format(TRAINING_STATS_FREQUENCY, [new_q / new_decisions_made for new_q in new_estimated_q]))
+
+                new_positions_count = [total - last for total, last in zip(positions_count, last_positions_count)]
+                logging.info('Total positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(positions_count))
+                logging.info('Positions chosen by clara [LONG, IDLE, SHORT] over the last {} steps : {}'
+                             .format(TRAINING_STATS_FREQUENCY, new_positions_count))
+                last_positions_count = [0, 0, 0]
+
                 last_estimated_q = total_estimated_q
                 last_descisions_made = total_decisions_made
                 logging.info('Epsilon: {}\n'.format(epsilon))

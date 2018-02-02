@@ -62,7 +62,6 @@ class Environment(object):
         starting_position = self.current_agent_position
 
         reward = 0
-
         # process action ###
         current_coin_price = self._get_current_price()
         # apply transaction fees and update coin_price_at_last_change)
@@ -101,16 +100,13 @@ class Environment(object):
             self._update_market_data_batch(last_state=self.loaded_market_data[0])
 
         if abs(reward) > 20:
-            logging.error('Reward ignored')
-            reward = 0
-
-        if abs(reward) > 10:
             logging.warning('From {} to {}'.format(start_timespan, end_timespan))
             logging.warning('Unusual reward: {}'.format(reward))
             logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
             logging.warning('Change in price: {} to {}'.format(previous_coin_price, current_coin_price))
             logging.warning('Trade entered at {} with coin price: {}\n'.format(self.timespan_of_last_entry,
                                                                                self.coin_price_at_last_entry))
+            reward = 0
 
         return reward, following_state_vector
 
