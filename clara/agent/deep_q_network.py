@@ -24,16 +24,16 @@ class DQN(object):
             self._copy_online_to_target_ops.append(target_biases[i].assign(bias))
 
         # modelling DQNs outputs
-        self.online_curr_output = _model_output(self._curr_state_vectors, online_weights, online_biases)
+        self._online_curr_output = _model_output(self._curr_state_vectors, online_weights, online_biases)
         online_next_output = _model_output(self._next_state_vectors, online_weights, online_biases)
         target_next_output = _model_output(self._next_state_vectors, target_weights, target_biases)
 
         # finding best actions for current state
-        action_indices = tf.argmax(self.online_curr_output, 1)
+        action_indices = tf.argmax(self._online_curr_output, 1)
         self._action_vectors = tf.one_hot(action_indices, outputs)
 
         # updating online DQN according to target Q values (using Double DQN approach)
-        online_q_values = tf.reduce_max(self.online_curr_output, axis=1)
+        online_q_values = tf.reduce_sum(tf.multiply(self._online_curr_output, self._action_vectors), axis=1)
         best_next_action_indices = tf.argmax(online_next_output, 1)
         best_next_action_vectors = tf.one_hot(best_next_action_indices, outputs)
         double_next_output = tf.reduce_sum(tf.multiply(target_next_output, best_next_action_vectors))
@@ -51,7 +51,7 @@ class DQN(object):
 
     def get_online_network_output(self, state):
         action_vector = self._action_vectors.eval(feed_dict={self._curr_state_vectors: [state]})
-        outputs = self.online_curr_output.eval(feed_dict={self._curr_state_vectors: [state]})
+        outputs = self._online_curr_output.eval(feed_dict={self._curr_state_vectors: [state]})
         return Position(action_vector[0].tolist()), outputs[0]
 
     def copy_online_to_target(self, session):
