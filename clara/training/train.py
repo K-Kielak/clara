@@ -141,7 +141,7 @@ def main():
                 logging.info('Total positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(positions_count))
                 logging.info('Positions chosen by clara [LONG, IDLE, SHORT] over the last {} steps : {}'
                              .format(TRAINING_STATS_FREQUENCY, new_positions_count))
-                last_positions_count = [0, 0, 0]
+                last_positions_count = positions_count
 
                 last_estimated_q = total_estimated_q
                 last_descisions_made = total_decisions_made
