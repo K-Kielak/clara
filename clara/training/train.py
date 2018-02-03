@@ -12,6 +12,10 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(message)s',
                     handlers=[logging.FileHandler('training.log'), logging.StreamHandler(sys.stdout)])
 
+LOADING_MODEL = False
+MODEL_PATH = './claradqn'
+SAVING_FREQUENCY = 500000
+
 OUTPUTS = 3  # Three values for 3 different actions
 STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to represent the previous action
 LAYERS_SIZES = [600, 400]
@@ -24,10 +28,10 @@ NUM_STEPS = 8000000  # How many steps to perform for training session
 TARGET_UPDATE_FREQUENCY = 10000  # How many steps before updating target network
 TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats print
 
-DISCOUNT_RATE = 0.9999  # Discount factor on the future, expected Q values
+DISCOUNT_RATE = 0.99  # Discount factor on the future, expected Q values
 LEARNING_RATE = 0.001  # Learning rate of the DQN
 START_EPS = 0.5  # Starting probability of choosing random action by the agent to explore the environment
-END_EPS = 0.01  # Ending probability of choosing random action by the agent to explore the environment
+END_EPS = 0.005  # Ending probability of choosing random action by the agent to explore the environment
 ANNEALING_STEPS = 2000000  # How many steps of training to reduce START_EPS to END_EPS
 
 EXCHANGE_TRANSACTION_FEE = 0.1  # in percentage from transaction, e.g. 0.1 means 0.1%
@@ -55,9 +59,17 @@ def main():
     environment = Environment(MARKET_INTERVAL, states_db_uri, EXCHANGE_TRANSACTION_FEE)
     logging.info('Environment initialized')
 
+    saver = tf.train.Saver()
+
     with tf.Session() as sess:
         logging.info('Starting training session...')
         sess.run(tf.global_variables_initializer())
+
+        if LOADING_MODEL:
+            print('Loading Model...')
+            ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
+            saver.restore(sess, ckpt.model_checkpoint_path)
+
         # pre-training random steps to gather initial experience
         for _ in range(PRE_TRAIN_STEPS):
             initial_state = environment.get_curr_state_vector()
@@ -105,6 +117,11 @@ def main():
             if i % (TRAINING_FREQUENCY * TARGET_UPDATE_FREQUENCY) == 0:
                 dqn.copy_online_to_target(sess)
 
+            # save model
+            if (i + 1) % SAVING_FREQUENCY == 0:
+                logging.info('Saving model\n')
+                saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, i))
+
             # print training stats
             if i % TRAINING_STATS_FREQUENCY == 0:
                 logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
@@ -146,6 +163,8 @@ def main():
                 last_estimated_q = total_estimated_q
                 last_descisions_made = total_decisions_made
                 logging.info('Epsilon: {}\n'.format(epsilon))
+
+        saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, NUM_STEPS))
 
 
 if __name__ == '__main__':

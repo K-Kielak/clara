@@ -116,7 +116,7 @@ class Environment(object):
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
         current_price = ema*(current_price + 100)
-        if current_price > 10 ** 4:  # TODO delete and inspect our data
+        if current_price > 10 ** 3:  # TODO delete and inspect our data
             current_price /= (10 ** 8)
 
         return current_price
