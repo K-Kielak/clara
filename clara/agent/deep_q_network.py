@@ -7,6 +7,7 @@ class DQN(object):
     def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
         # setting up placeholders
         self._curr_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
+        self._made_action_vectors = tf.placeholder(shape=[None, outputs], dtype=tf.float32)
         self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float32)
         self._next_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float32)
 
@@ -29,11 +30,11 @@ class DQN(object):
         target_next_output = _model_output(self._next_state_vectors, target_weights, target_biases)
 
         # finding best actions for current state
-        action_indices = tf.argmax(self._online_curr_output, 1)
-        self._action_vectors = tf.one_hot(action_indices, outputs)
+        best_action_indices = tf.argmax(self._online_curr_output, 1)
+        self._best_action_vectors = tf.one_hot(best_action_indices, outputs)
 
         # updating online DQN according to target Q values (using Double DQN approach)
-        online_q_values = tf.reduce_sum(tf.multiply(self._online_curr_output, self._action_vectors), axis=1)
+        online_q_values = tf.reduce_sum(tf.multiply(self._online_curr_output, self._made_action_vectors), axis=1)
         best_next_action_indices = tf.argmax(online_next_output, 1)
         best_next_action_vectors = tf.one_hot(best_next_action_indices, outputs)
         double_next_output = tf.reduce_sum(tf.multiply(target_next_output, best_next_action_vectors))
@@ -44,13 +45,14 @@ class DQN(object):
 
     def train(self, train_batch):
         self._train_step.run(feed_dict={
-            self._curr_state_vectors: np.vstack(train_batch[:, 0]),  # [:, 1] takes state that agent saw before making the action
+            self._curr_state_vectors: np.vstack(train_batch[:, 0]),  # [:, 0] takes state that agent saw before making the action
+            self._made_action_vectors: np.vstack(train_batch[:, 1]),  # [:, 1] takes actions made by the agent
             self._immediate_rewards: np.squeeze(train_batch[:, 2]),  # [:, 2] takes immediate reward following the action
             self._next_state_vectors: np.vstack(train_batch[:, 3])  # [:, 3] takes state following the action
         })
 
     def get_online_network_output(self, state):
-        action_vector = self._action_vectors.eval(feed_dict={self._curr_state_vectors: [state]})
+        action_vector = self._best_action_vectors.eval(feed_dict={self._curr_state_vectors: [state]})
         outputs = self._online_curr_output.eval(feed_dict={self._curr_state_vectors: [state]})
         return Position(action_vector[0].tolist()), outputs[0]
 

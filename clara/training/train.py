@@ -75,7 +75,7 @@ def main():
             initial_state = environment.get_curr_state_vector()
             action = random.choice(list(Position))
             reward, following_state = environment.make_action(action)
-            experience_memory.add(initial_state, action, reward, following_state)
+            experience_memory.add(initial_state, action.value, reward, following_state)
 
         logging.info('Pre train steps finished, starting proper training')
         # proper training
@@ -106,7 +106,7 @@ def main():
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
-            experience_memory.add(initial_state, action, reward, following_state)
+            experience_memory.add(initial_state, action.value, reward, following_state)
 
             # update online DQN
             if i % TRAINING_FREQUENCY == 0:
