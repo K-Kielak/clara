@@ -104,7 +104,7 @@ def _initialize_random_weights(state_vector_size, layers_sizes, outputs, trainab
 
 
 def _generate_random_weights(size, trainable, name):
-    return tf.Variable(tf.zeros(size), trainable=trainable, name=name)
+    return tf.Variable(tf.truncated_normal(size, stddev=0.001, mean=0.002), trainable=trainable, name=name)
 
 
 def _initialize_random_biases(layers_sizes, outputs, trainable, name):
@@ -118,4 +118,4 @@ def _initialize_random_biases(layers_sizes, outputs, trainable, name):
 
 
 def _generate_random_biases(size, trainable, name):
-    return tf.Variable(tf.zeros(size), trainable=trainable, name=name)
+    return tf.Variable(tf.truncated_normal(size, stddev=0.001), trainable=trainable, name=name)
