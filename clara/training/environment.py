@@ -48,7 +48,11 @@ class Environment(object):
     def get_curr_state_vector(self):
         current_state = self.loaded_market_data[0]
         ticks = current_state[TICKS_LABEL]
-        state_vector = [current_state[EMA_LABEL]]
+        ema = current_state[EMA_LABEL]
+        if ema > 10**3:
+            ema /= 10**8
+
+        state_vector = [ema]
         for t in ticks:
             state_vector.extend(t.values())
 
@@ -113,11 +117,11 @@ class Environment(object):
     def _get_current_price(self,):
         current_state = self.loaded_market_data[0]
         ema = current_state[EMA_LABEL]
+        if ema > 10**3:
+            ema /= 10**8
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
         current_price = ema*(current_price + 100)
-        if current_price > 10 ** 3:  # TODO delete and inspect our data
-            current_price /= (10 ** 8)
 
         return current_price
 

@@ -29,7 +29,7 @@ TARGET_UPDATE_FREQUENCY = 10000  # How many steps before updating target network
 TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats print
 
 DISCOUNT_RATE = 0.99  # Discount factor on the future, expected Q values
-LEARNING_RATE = 0.001  # Learning rate of the DQN
+LEARNING_RATE = 0.0001  # Learning rate of the DQN
 START_EPS = 0.5  # Starting probability of choosing random action by the agent to explore the environment
 END_EPS = 0.005  # Ending probability of choosing random action by the agent to explore the environment
 ANNEALING_STEPS = 2000000  # How many steps of training to reduce START_EPS to END_EPS
@@ -89,6 +89,8 @@ def main():
         last_estimated_q = [0, 0, 0]
         positions_count = [0, 0, 0]
         last_positions_count = [0, 0, 0]
+        total_loss = 0
+        last_loss = 0
         eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
         epsilon = START_EPS
         for i in range(NUM_STEPS):
@@ -111,10 +113,10 @@ def main():
             # update online DQN
             if i % TRAINING_FREQUENCY == 0:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
-                dqn.train(train_batch)
+                total_loss += dqn.train(train_batch)
 
             # copy online DQN parameters to the target DQN
-            if i % (TRAINING_FREQUENCY * TARGET_UPDATE_FREQUENCY) == 0:
+            if i % TARGET_UPDATE_FREQUENCY == 0:
                 dqn.copy_online_to_target(sess)
 
             # save model
@@ -141,7 +143,7 @@ def main():
                 total_profitability = environment.average_trade_profitability * environment.trades_so_far
                 last_total_profitability = last_average_trade_profitability * last_trades_so_far
                 new_average_profitability = (total_profitability - last_total_profitability) / \
-                                            (environment.trades_so_far - last_trades_so_far)
+                                            (environment.trades_so_far - last_trades_so_far + 1)
                 logging.info('Average profitability over last {} trades: {}'
                              .format((environment.trades_so_far - last_trades_so_far), new_average_profitability))
                 last_average_trade_profitability = environment.average_trade_profitability
@@ -159,6 +161,10 @@ def main():
                 logging.info('Positions chosen by clara [LONG, IDLE, SHORT] over the last {} steps : {}'
                              .format(TRAINING_STATS_FREQUENCY, new_positions_count))
                 last_positions_count = positions_count
+
+                logging.info('Average loss so far: {}'.format(total_loss / (i + 1)))
+                logging.info('Average loss over the last {} steps: {}'
+                             .format(TRAINING_STATS_FREQUENCY, (total_loss - last_loss) / TRAINING_STATS_FREQUENCY))
 
                 last_estimated_q = total_estimated_q
                 last_descisions_made = total_decisions_made
