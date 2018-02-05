@@ -16,6 +16,8 @@ LOADING_MODEL = False
 MODEL_PATH = './claradqn'
 SAVING_FREQUENCY = 500000
 
+DANGEROUS_Q_DIFFERENCE = 1e-8
+
 OUTPUTS = 3  # Three values for 3 different actions
 STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to represent the previous action
 LAYERS_SIZES = [600, 400]
@@ -29,7 +31,7 @@ TARGET_UPDATE_FREQUENCY = 10000  # How many steps before updating target network
 TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats print
 
 DISCOUNT_RATE = 0.99  # Discount factor on the future, expected Q values
-LEARNING_RATE = 0.0001  # Learning rate of the DQN
+LEARNING_RATE = 0.00001  # Learning rate of the DQN
 START_EPS = 0.5  # Starting probability of choosing random action by the agent to explore the environment
 END_EPS = 0.005  # Ending probability of choosing random action by the agent to explore the environment
 ANNEALING_STEPS = 2000000  # How many steps of training to reduce START_EPS to END_EPS
@@ -79,8 +81,6 @@ def main():
 
         logging.info('Pre train steps finished, starting proper training')
         # proper training
-        total_decisions_made = 0
-        last_descisions_made = 0
         total_reward = 0
         last_total_reward = 0
         last_trades_so_far = 0
@@ -98,17 +98,20 @@ def main():
                 epsilon -= eps_drop
 
             initial_state = environment.get_curr_state_vector()
+            action, estimated_q = dqn.get_online_network_output(initial_state)
+            total_estimated_q = [total_q + new_q for total_q, new_q in zip(total_estimated_q, estimated_q)]
+            positions_count = [count + new_pos for count, new_pos in zip(positions_count, action.value)]
             if random.random() < epsilon:
                 action = random.choice(list(Position))
-            else:
-                action, estimated_q = dqn.get_online_network_output(initial_state)
-                total_estimated_q = [total_q + new_q for total_q, new_q in zip(total_estimated_q, estimated_q)]
-                total_decisions_made += 1
-                positions_count = [count + new_pos for count, new_pos in zip(positions_count, action.value)]
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
             experience_memory.add(initial_state, action.value, reward, following_state)
+
+            _, next_estimated_q = dqn.get_online_network_output(following_state)
+            if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE:
+                logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
+                             .format(estimated_q, next_estimated_q))
 
             # update online DQN
             if i % TRAINING_FREQUENCY == 0:
@@ -149,12 +152,11 @@ def main():
                 last_average_trade_profitability = environment.average_trade_profitability
                 last_trades_so_far = environment.trades_so_far
 
-                new_decisions_made = total_decisions_made - last_descisions_made + 1
                 new_estimated_q = [total_q - last_q for total_q, last_q in zip(total_estimated_q, last_estimated_q)]
                 logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
-                             .format([total_q / (total_decisions_made + 1) for total_q in total_estimated_q]))
+                             .format([total_q / (i + 1) for total_q in total_estimated_q]))
                 logging.info('Average estimated Q over the last {} steps: {}'
-                             .format(TRAINING_STATS_FREQUENCY, [new_q / new_decisions_made for new_q in new_estimated_q]))
+                             .format(TRAINING_STATS_FREQUENCY, [new_q / TRAINING_STATS_FREQUENCY for new_q in new_estimated_q]))
 
                 new_positions_count = [total - last for total, last in zip(positions_count, last_positions_count)]
                 logging.info('Total positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(positions_count))
@@ -167,7 +169,6 @@ def main():
                              .format(TRAINING_STATS_FREQUENCY, (total_loss - last_loss) / TRAINING_STATS_FREQUENCY))
 
                 last_estimated_q = total_estimated_q
-                last_descisions_made = total_decisions_made
                 logging.info('Epsilon: {}\n'.format(epsilon))
 
         saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, NUM_STEPS))

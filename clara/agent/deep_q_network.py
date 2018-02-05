@@ -56,7 +56,7 @@ class DQN(object):
             self._immediate_rewards: np.squeeze(train_batch[:, 2]),  # [:, 2] takes immediate reward following the action
             self._next_state_vectors: np.vstack(train_batch[:, 3])  # [:, 3] takes state following the action
         })
-        
+
         return loss
 
     def get_online_network_output(self, state):
@@ -97,7 +97,7 @@ def _model_output(input, weights, biases):
         layer_sum = tf.matmul(activation, weights[i]) + biases[i]
         activation = tf.nn.relu(layer_sum)
 
-    output = tf.matmul(activation, weights[-1]) + biases[-1]
+    output = tf.matmul(activation, weights[-1])  # + biases[-1]
     return output
 
 
