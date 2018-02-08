@@ -100,11 +100,11 @@ def convert_ticks_to_states(ticks):
     states = []
     for i in range(0, len(ticks) - ticks_needed_for_one_state):
         # take ticks to calculate ema, reverse them (step -1) so they are sorted in descending importance
-        ema_ticks = ticks[(i+EMA_SIZE):i:-1]
+        ema_ticks = list(reversed(ticks[i:i+EMA_SIZE]))
         ema = calculate_ema(ema_ticks)  # TODO can you calculate ema iteratively so it runs faster?
         state_ticks = convert_ticks_to_state_ticks(ticks[i+EMA_SIZE:i+ticks_needed_for_one_state], ema)
         state = {
-            TIMESPAN_LABEL: ticks[i+ticks_needed_for_one_state][TIMESPAN_LABEL],
+            TIMESPAN_LABEL: ticks[i+ticks_needed_for_one_state-1][TIMESPAN_LABEL],
             EMA_LABEL: ema,
             TICKS_LABEL: state_ticks
         }
@@ -121,16 +121,25 @@ def convert_ticks_to_state_ticks(ticks, ema):
     :return: state ticks
     """
     state_ticks = []
+    volume_mean = calculate_mean_volume(ticks)
     for t in ticks:
         state_ticks.append({
             OPEN_LABEL: 100 * (t[OPEN_LABEL] - ema) / ema,
             HIGH_LABEL: 100 * (t[HIGH_LABEL] - ema) / ema,
             LOW_LABEL: 100 * (t[LOW_LABEL] - ema) / ema,
             CLOSE_LABEL: 100 * (t[CLOSE_LABEL] - ema) / ema,
-            VOLUME_LABEL: t[VOLUME_LABEL]
+            BASE_VOLUME_LABEL: 100 * (t[BASE_VOLUME_LABEL] - volume_mean) / volume_mean if volume_mean != 0 else 0
         })
 
     return state_ticks
+
+
+def calculate_mean_volume(ticks):
+    volume_sum = 0
+    for t in ticks:
+        volume_sum += t[BASE_VOLUME_LABEL]
+
+    return volume_sum / len(ticks)
 
 
 def calculate_ema(ticks):
