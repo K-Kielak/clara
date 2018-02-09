@@ -5,6 +5,7 @@ from clara.agent.position import Position
 
 class DQN(object):
     LRELU_ALPHA = 0.2
+    GRADIENT_CLIP = 1.
 
     def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
         # setting up placeholders
@@ -43,7 +44,10 @@ class DQN(object):
         target_q_values = self._immediate_rewards + tf.scalar_mul(discount_rate, double_next_output)
         td_errors = tf.square(online_q_values - target_q_values)
         self.loss_function = tf.reduce_mean(td_errors)
-        self._train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss_function)
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        grads = optimizer.compute_gradients(self.loss_function)
+        clipped_grads = [(tf.clip_by_value(grad, -DQN.GRADIENT_CLIP, DQN.GRADIENT_CLIP), var) for grad, var in grads]
+        self._train_step = optimizer.apply_gradients(clipped_grads)
 
     def train(self, train_batch):
         loss = self.loss_function.eval(feed_dict={
@@ -99,7 +103,7 @@ def _model_output(input, weights, biases):
         layer_sum = tf.matmul(activation, weights[i]) + biases[i]
         activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
 
-    output = tf.matmul(activation, weights[-1])  # + biases[-1]
+    output = tf.matmul(activation, weights[-1]) + biases[-1]
     return output
 
 
