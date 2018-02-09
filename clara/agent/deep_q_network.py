@@ -4,6 +4,8 @@ from clara.agent.position import Position
 
 
 class DQN(object):
+    LRELU_ALPHA = 0.2
+
     def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
         # setting up placeholders
         self._curr_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
@@ -89,13 +91,13 @@ def _model_output(input, weights, biases):
 
     # calculate first layer activation
     layer_sum = tf.matmul(input, weights[0]) + biases[0]
-    activation = tf.nn.relu(layer_sum)
+    activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
 
     # calculate activations of the remaining HIDDEN layer (therefore iterate until len - 1 to leave output layer
     # as output layer will have linear output, not RELU
     for i in range(1, len(weights)-1):
         layer_sum = tf.matmul(activation, weights[i]) + biases[i]
-        activation = tf.nn.relu(layer_sum)
+        activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
 
     output = tf.matmul(activation, weights[-1])  # + biases[-1]
     return output
