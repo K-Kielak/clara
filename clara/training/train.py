@@ -100,7 +100,7 @@ def main():
 
             # make action
             initial_state = environment.get_curr_state_vector()
-            action, estimated_q, summary = dqn.get_online_network_output(initial_state, sess)
+            action, estimated_q = dqn.get_online_network_output(initial_state, sess)
             total_estimated_q = [total_q + new_q for total_q, new_q in zip(total_estimated_q, estimated_q)]
             positions_count = [count + new_pos for count, new_pos in zip(positions_count, action.value)]
             if random.random() < epsilon:
@@ -110,10 +110,7 @@ def main():
             total_reward += reward
             experience_memory.add(initial_state, action.value, reward, following_state)
 
-            # record summaries
-            summary_writer.add_summary(summary, i)
-
-            _, next_estimated_q, _ = dqn.get_online_network_output(following_state, sess)
+            _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
             if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE:
                 logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
                              .format(estimated_q, next_estimated_q))
@@ -121,7 +118,9 @@ def main():
             # update online DQN
             if i % TRAINING_FREQUENCY == 0:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
-                total_loss += dqn.train(train_batch, sess)
+                loss, summary = dqn.train(train_batch, sess)
+                total_loss += loss
+                summary_writer.add_summary(summary, i)
 
             # copy online DQN parameters to the target DQN
             if i % TARGET_UPDATE_FREQUENCY == 0:

@@ -68,21 +68,20 @@ class DQN(object):
         self._summaries = tf.summary.merge_all()
 
     def train(self, train_batch, session):
-        loss, _ = session.run([self._loss_function, self._train_step], feed_dict={
+        loss, summary, _ = session.run([self._loss_function, self._summaries, self._train_step], feed_dict={
             self._curr_state_vectors: np.vstack(train_batch[:, 0]),
             self._made_action_vectors: np.vstack(train_batch[:, 1]),
             self._immediate_rewards: np.squeeze(train_batch[:, 2]),
             self._next_state_vectors: np.vstack(train_batch[:, 3])
         })
 
-        return loss
+        return loss, summary
 
     def get_online_network_output(self, state, session):
-        action_vector, outputs, summary = \
-            session.run([self._best_action_vectors, self._online_curr_output, self._summaries],
-                        feed_dict={self._curr_state_vectors: [state]})
+        action_vector, outputs = session.run([self._best_action_vectors, self._online_curr_output],
+                                             feed_dict={self._curr_state_vectors: [state]})
 
-        return Position(action_vector[0].tolist()), outputs[0], summary
+        return Position(action_vector[0].tolist()), outputs[0]
 
     def copy_online_to_target(self, session):
         for op in self._copy_online_to_target_ops:
