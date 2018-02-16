@@ -3,16 +3,31 @@ import tensorflow as tf
 from clara.agent.position import Position
 
 
+def variable_summaries(var):
+    """Variables summaries for Tensorboard"""
+    mean = tf.reduce_mean(var)
+    tf.summary.scalar('mean', mean)
+    with tf.name_scope('stddev'):
+        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+
+    tf.summary.scalar('stddev', stddev)
+    tf.summary.scalar('max', tf.reduce_max(var))
+    tf.summary.scalar('min', tf.reduce_min(var))
+    tf.summary.histogram('histogram', var)
+
+
 class DQN(object):
     LRELU_ALPHA = 0.2
     GRADIENT_CLIP = 1.
 
     def __init__(self, state_vector_size, layer_sizes, outputs, learning_rate, discount_rate):
         # setting up placeholders
-        self._curr_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
-        self._made_action_vectors = tf.placeholder(shape=[None, outputs], dtype=tf.float64)
-        self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float64)
-        self._next_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
+        with tf.name_scope('training-input'):
+            self._curr_state_vectors = tf.placeholder(shape=[None, state_vector_size],
+                                                      dtype=tf.float64, name='curr-state')
+            self._made_action_vectors = tf.placeholder(shape=[None, outputs], dtype=tf.float64)
+            self._immediate_rewards = tf.placeholder(shape=[None], dtype=tf.float64)
+            self._next_state_vectors = tf.placeholder(shape=[None, state_vector_size], dtype=tf.float64)
 
         # creating DQNs
         online_weights, online_biases = \
@@ -43,14 +58,17 @@ class DQN(object):
         double_next_output = tf.reduce_sum(tf.multiply(target_next_output, best_next_action_vectors), 1)
         target_q_values = self._immediate_rewards + tf.scalar_mul(discount_rate, double_next_output)
         td_errors = tf.square(online_q_values - target_q_values)
-        self.loss_function = tf.reduce_mean(td_errors)
+        self._loss_function = tf.reduce_mean(td_errors)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        grads = optimizer.compute_gradients(self.loss_function)
+        grads = optimizer.compute_gradients(self._loss_function)
         clipped_grads = [(tf.clip_by_value(grad, -DQN.GRADIENT_CLIP, DQN.GRADIENT_CLIP), var) for grad, var in grads]
         self._train_step = optimizer.apply_gradients(clipped_grads)
 
+        # Merge all summaries
+        self._summaries = tf.summary.merge_all()
+
     def train(self, train_batch):
-        loss = self.loss_function.eval(feed_dict={
+        loss = self._loss_function.eval(feed_dict={
             self._curr_state_vectors: np.vstack(train_batch[:, 0]),
             self._made_action_vectors: np.vstack(train_batch[:, 1]),
             self._immediate_rewards: np.squeeze(train_batch[:, 2]),
@@ -65,10 +83,11 @@ class DQN(object):
 
         return loss
 
-    def get_online_network_output(self, state):
-        action_vector = self._best_action_vectors.eval(feed_dict={self._curr_state_vectors: [state]})
-        outputs = self._online_curr_output.eval(feed_dict={self._curr_state_vectors: [state]})
-        return Position(action_vector[0].tolist()), outputs[0]
+    def get_online_network_output(self, state, session):
+        action_vector, outputs, summary = \
+            session.run([self._best_action_vectors, self._online_curr_output, self._summaries],
+                        feed_dict={self._curr_state_vectors: [state]})
+        return Position(action_vector[0].tolist()), outputs[0], summary
 
     def copy_online_to_target(self, session):
         for op in self._copy_online_to_target_ops:
@@ -108,12 +127,19 @@ def _model_output(input, weights, biases):
 
 
 def _initialize_random_weights(state_vector_size, layers_sizes, outputs, trainable, name):
-    weights = [_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name)]
+    with tf.name_scope(name + '-input-layer'), tf.name_scope('weights'):
+        weights = [_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name)]
+        variable_summaries(weights[0])
 
     for i in range(1, len(layers_sizes)):
-        weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
+        with tf.name_scope(name + '-hidden-layer' + str(i)), tf.name_scope('weights'):
+            weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
+            variable_summaries(weights[i])
 
-    weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
+    with tf.name_scope(name + '-output-layer'), tf.name_scope('weights'):
+        weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
+        variable_summaries(weights[-1])
+
     return weights
 
 
@@ -122,12 +148,19 @@ def _generate_random_weights(size, trainable, name):
 
 
 def _initialize_random_biases(layers_sizes, outputs, trainable, name):
-    biases = [_generate_random_biases([layers_sizes[0]], trainable, name)]
+    with tf.name_scope(name + '-input-layer'), tf.name_scope('biases'):
+        biases = [_generate_random_biases([layers_sizes[0]], trainable, name)]
+        variable_summaries(biases[0])
 
     for i in range(1, len(layers_sizes)):
-        biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
+        with tf.name_scope(name + '-hidden-layer' + str(i)), tf.name_scope('biases'):
+            biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
+            variable_summaries(biases[i])
 
-    biases.append(_generate_random_biases([outputs], trainable, name))
+    with tf.name_scope(name + '-output-layer'), tf.name_scope('biases'):
+        biases.append(_generate_random_biases([outputs], trainable, name))
+        variable_summaries(biases[-1])
+
     return biases
 
 
