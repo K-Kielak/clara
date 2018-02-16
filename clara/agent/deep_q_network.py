@@ -91,35 +91,12 @@ class DQN(object):
 def _create_dqn_model(state_vector_size, layers_sizes, outputs, trainable=True, name=None):
     """
     Takes DQN hyperparameters and creates tensorflow model for it
-    :param state_placeholder: tensorflow placeholders for input state
+    :param state_vector_size: tensorflow placeholders for input state
     :param layers_sizes: list of hidden layers sizes, length of the list indicates the number of layers, whereas each
             of the list elements indicates number of nodes in the layer
     :param outputs: number of outputs for DQN, each output corresponds to separate action
     :return: tensorflow model of DQN that can be used for training and later for prediction
     """
-    weights, biases = _initialize_parameters(state_vector_size, layers_sizes, outputs, trainable, name)
-    return weights, biases
-
-
-def _model_output(input, weights, biases):
-    if len(weights) != len(biases):
-        raise RuntimeError('weight and bias collections must have the same length!')
-
-    # calculate first layer activation
-    layer_sum = tf.matmul(input, weights[0]) + biases[0]
-    activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
-
-    # calculate activations of the remaining HIDDEN layer (therefore iterate until len - 1 to leave output layer
-    # as output layer will have linear output, not RELU
-    for i in range(1, len(weights)-1):
-        layer_sum = tf.matmul(activation, weights[i]) + biases[i]
-        activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
-
-    output = tf.matmul(activation, weights[-1]) + biases[-1]
-    return output
-
-
-def _initialize_parameters(state_vector_size, layers_sizes, outputs, trainable, name):
     weights = []
     biases = []
 
@@ -149,6 +126,24 @@ def _initialize_parameters(state_vector_size, layers_sizes, outputs, trainable, 
             variable_summaries(biases[-1])
 
     return weights, biases
+
+
+def _model_output(input, weights, biases):
+    if len(weights) != len(biases):
+        raise RuntimeError('weight and bias collections must have the same length!')
+
+    # calculate first layer activation
+    layer_sum = tf.matmul(input, weights[0]) + biases[0]
+    activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
+
+    # calculate activations of the remaining HIDDEN layer (therefore iterate until len - 1 to leave output layer
+    # as output layer will have linear output, not RELU
+    for i in range(1, len(weights)-1):
+        layer_sum = tf.matmul(activation, weights[i]) + biases[i]
+        activation = tf.nn.leaky_relu(layer_sum, alpha=tf.constant(DQN.LRELU_ALPHA, dtype=tf.float64))
+
+    output = tf.matmul(activation, weights[-1]) + biases[-1]
+    return output
 
 
 def _generate_random_weights(size, trainable, name):
