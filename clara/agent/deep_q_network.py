@@ -67,18 +67,12 @@ class DQN(object):
         # Merge all summaries
         self._summaries = tf.summary.merge_all()
 
-    def train(self, train_batch):
-        loss = self._loss_function.eval(feed_dict={
+    def train(self, train_batch, session):
+        loss, _ = session.run([self._loss_function, self._train_step], feed_dict={
             self._curr_state_vectors: np.vstack(train_batch[:, 0]),
             self._made_action_vectors: np.vstack(train_batch[:, 1]),
             self._immediate_rewards: np.squeeze(train_batch[:, 2]),
             self._next_state_vectors: np.vstack(train_batch[:, 3])
-        })
-        self._train_step.run(feed_dict={
-            self._curr_state_vectors: np.vstack(train_batch[:, 0]),  # [:, 0] takes state that agent saw before making the action
-            self._made_action_vectors: np.vstack(train_batch[:, 1]),  # [:, 1] takes actions made by the agent
-            self._immediate_rewards: np.squeeze(train_batch[:, 2]),  # [:, 2] takes immediate reward following the action
-            self._next_state_vectors: np.vstack(train_batch[:, 3])  # [:, 3] takes state following the action
         })
 
         return loss
@@ -87,6 +81,7 @@ class DQN(object):
         action_vector, outputs, summary = \
             session.run([self._best_action_vectors, self._online_curr_output, self._summaries],
                         feed_dict={self._curr_state_vectors: [state]})
+
         return Position(action_vector[0].tolist()), outputs[0], summary
 
     def copy_online_to_target(self, session):

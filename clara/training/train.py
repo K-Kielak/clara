@@ -121,7 +121,7 @@ def main():
             # update online DQN
             if i % TRAINING_FREQUENCY == 0:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
-                total_loss += dqn.train(train_batch)
+                total_loss += dqn.train(train_batch, sess)
 
             # copy online DQN parameters to the target DQN
             if i % TARGET_UPDATE_FREQUENCY == 0:
