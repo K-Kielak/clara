@@ -47,6 +47,18 @@ if STATES_DB_URI_ENV not in os.environ:
                            'please set it before running the script again'.format(STATES_DB_URI_ENV))
 
 
+def vector_summaries(vector):
+    summaries = []
+    vector_shape = vector.get_shape().as_list()[0]
+    print(vector.get_shape().as_list())
+    for i in range(0, vector_shape):
+        summaries.append(tf.summary.scalar(str(i), tf.gather(vector, i)))
+
+    summaries.append(tf.summary.scalar('max', tf.reduce_max(vector)))
+    summaries.append(tf.summary.scalar('mean', tf.reduce_mean(vector)))
+    return summaries
+
+
 def main():
     logging.info('New training session starting')
     logging.info('.')
@@ -81,7 +93,8 @@ def main():
             experience_memory.add(initial_state, action.value, reward, following_state)
 
         logging.info('Pre train steps finished, starting proper training')
-        # proper training
+
+        # training stats and data initialization
         total_reward = 0
         last_total_reward = 0
         last_trades_so_far = 0
@@ -94,6 +107,16 @@ def main():
         last_loss = 0
         eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
         epsilon = START_EPS
+
+        with tf.name_scope('reward'):
+            reward_placeholder = tf.placeholder(tf.float64, shape=(), name='reward')
+            reward_summary = tf.summary.scalar('value', reward_placeholder)
+        with tf.name_scope('q-values'):
+            q_values_placeholder = tf.placeholder(tf.float64, shape=([3,]), name='q-values')
+            step_summaries = vector_summaries(q_values_placeholder)
+        step_summaries = tf.summary.merge(step_summaries + [reward_summary])
+
+        # proper training
         for i in range(NUM_STEPS):
             if i < ANNEALING_STEPS:
                 epsilon -= eps_drop
@@ -130,6 +153,13 @@ def main():
             if (i + 1) % SAVING_FREQUENCY == 0:
                 logging.info('Saving model\n')
                 saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, i))
+
+            # add summaries
+            summary = sess.run(step_summaries, feed_dict={
+                reward_placeholder: reward,
+                q_values_placeholder: estimated_q
+            })
+            summary_writer.add_summary(summary, i)
 
             # print training stats
             if i % TRAINING_STATS_FREQUENCY == 0:
