@@ -64,7 +64,7 @@ class DQN(object):
         clipped_grads = [(tf.clip_by_value(grad, -DQN.GRADIENT_CLIP, DQN.GRADIENT_CLIP), var) for grad, var in grads]
         self._train_step = optimizer.apply_gradients(clipped_grads)
 
-        # Merge all summaries
+        # merge all summaries
         self._summaries = tf.summary.merge_all()
 
     def train(self, train_batch, session):
@@ -97,8 +97,7 @@ def _create_dqn_model(state_vector_size, layers_sizes, outputs, trainable=True, 
     :param outputs: number of outputs for DQN, each output corresponds to separate action
     :return: tensorflow model of DQN that can be used for training and later for prediction
     """
-    weights = _initialize_random_weights(state_vector_size, layers_sizes, outputs, trainable, name)
-    biases = _initialize_random_biases(layers_sizes, outputs, trainable, name)
+    weights, biases = _initialize_parameters(state_vector_size, layers_sizes, outputs, trainable, name)
     return weights, biases
 
 
@@ -120,42 +119,40 @@ def _model_output(input, weights, biases):
     return output
 
 
-def _initialize_random_weights(state_vector_size, layers_sizes, outputs, trainable, name):
-    with tf.name_scope(name + '-input-layer'), tf.name_scope('weights'):
-        weights = [_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name)]
-        variable_summaries(weights[0])
+def _initialize_parameters(state_vector_size, layers_sizes, outputs, trainable, name):
+    weights = []
+    biases = []
+
+    with tf.name_scope(name + '-hidden-layer0'):
+        with tf.name_scope('weights'):
+            weights.append(_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name))
+            variable_summaries(weights[0])
+        with tf.name_scope('biases'):
+            biases.append(_generate_random_biases([layers_sizes[0]], trainable, name))
+            variable_summaries(biases[0])
 
     for i in range(1, len(layers_sizes)):
-        with tf.name_scope(name + '-hidden-layer' + str(i)), tf.name_scope('weights'):
-            weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
-            variable_summaries(weights[i])
+        with tf.name_scope(name + '-hidden-layer' + str(i)):
+            with tf.name_scope('weights'):
+                weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
+                variable_summaries(weights[i])
+            with tf.name_scope('biases'):
+                biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
+                variable_summaries(biases[i])
 
-    with tf.name_scope(name + '-output-layer'), tf.name_scope('weights'):
-        weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
-        variable_summaries(weights[-1])
+    with tf.name_scope(name + '-output-layer'):
+        with tf.name_scope('weights'):
+            weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
+            variable_summaries(weights[-1])
+        with tf.name_scope('biases'):
+            biases.append(_generate_random_biases([outputs], trainable, name))
+            variable_summaries(biases[-1])
 
-    return weights
+    return weights, biases
 
 
 def _generate_random_weights(size, trainable, name):
     return tf.Variable(tf.truncated_normal(size, stddev=0.00001, dtype=tf.float64), trainable=trainable, name=name)
-
-
-def _initialize_random_biases(layers_sizes, outputs, trainable, name):
-    with tf.name_scope(name + '-input-layer'), tf.name_scope('biases'):
-        biases = [_generate_random_biases([layers_sizes[0]], trainable, name)]
-        variable_summaries(biases[0])
-
-    for i in range(1, len(layers_sizes)):
-        with tf.name_scope(name + '-hidden-layer' + str(i)), tf.name_scope('biases'):
-            biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
-            variable_summaries(biases[i])
-
-    with tf.name_scope(name + '-output-layer'), tf.name_scope('biases'):
-        biases.append(_generate_random_biases([outputs], trainable, name))
-        variable_summaries(biases[-1])
-
-    return biases
 
 
 def _generate_random_biases(size, trainable, name):
