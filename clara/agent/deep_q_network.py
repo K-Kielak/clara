@@ -58,7 +58,10 @@ class DQN(object):
         double_next_output = tf.reduce_sum(tf.multiply(target_next_output, best_next_action_vectors), 1)
         target_q_values = self._immediate_rewards + tf.scalar_mul(discount_rate, double_next_output)
         td_errors = tf.square(online_q_values - target_q_values)
-        self._loss_function = tf.reduce_mean(td_errors)
+        with tf.name_scope('loss'):
+            self._loss_function = tf.reduce_mean(td_errors)
+            tf.summary.scalar('value', self._loss_function)
+
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
         grads = optimizer.compute_gradients(self._loss_function)
         clipped_grads = [(tf.clip_by_value(grad, -DQN.GRADIENT_CLIP, DQN.GRADIENT_CLIP), var) for grad, var in grads]
