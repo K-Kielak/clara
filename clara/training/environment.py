@@ -6,9 +6,11 @@ from clara.agent.position import Position
 from clara.daos.processed_data_dao import ProcessedDataDAO
 from clara.daos.processed_data_dao import TIMESPAN_LABEL, EMA_LABEL, TICKS_LABEL
 from collections import deque
+from datetime import timedelta
 
 
 class Environment(object):
+    TESTING_MINUTES = 5 * 1440  # How many of the last market minutes to use for testing (1 day = 1440 minutes)
     # How many states in the future to load from the database
     # (the higher value the more RAM is required, the lower the slower getting the data will be)
     MAX_BATCH_SIZE = 25000  # 50000 ~= 0.4GB
@@ -28,6 +30,8 @@ class Environment(object):
 
         self.exchange_transaction_fee = exchange_transaction_fee
         self.loaded_market_data = deque()
+        self.test_start_timespan = self._get_test_start_timespan_for_curr_market()
+        self.is_test = False
         self.current_agent_position = Position.IDLE
 
         self._update_market_data_batch()
@@ -57,7 +61,7 @@ class Environment(object):
             state_vector.extend(t.values())
 
         state_vector.extend(self.current_agent_position.value)
-        return state_vector
+        return state_vector, self.is_test
 
     def make_action(self, new_agent_position):
         # data needed for logging
@@ -90,6 +94,10 @@ class Environment(object):
         # update agent and the market ###
         self.current_agent_position = new_agent_position
         self.loaded_market_data.popleft()
+        if not self.is_test and self.loaded_market_data[0][TIMESPAN_LABEL] > self.test_start_timespan:
+            logging.info('Starting tests on {}'.format(self.tick_types[self.current_tick_type_index]))
+            self.is_test = True
+
         previous_coin_price = current_coin_price
         current_coin_price = self._get_current_price()
 
@@ -98,7 +106,7 @@ class Environment(object):
         percentage_change = (100 * coin_price_change) / self.coin_price_at_last_entry
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
         reward += self.current_agent_position.get_multiplier() * percentage_change
-        following_state_vector = self.get_curr_state_vector()
+        following_state_vector, _ = self.get_curr_state_vector()
 
         if len(self.loaded_market_data) == 1:
             self._update_market_data_batch(last_state=self.loaded_market_data[0])
@@ -142,8 +150,14 @@ class Environment(object):
         if len(self.loaded_market_data) <= 1:
             self._increment_tick_type_index()
             logging.info('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
+            self.is_test = False
+            self.test_start_timespan = self._get_test_start_timespan_for_curr_market()  # update test start timespan
             self.current_agent_position = Position.IDLE  # reset the agent when changing the market
             self._update_market_data_batch()
+
+    def _get_test_start_timespan_for_curr_market(self):
+        latest_market_timespan = self.dao.get_latest_state_timespan(self.tick_types[self.current_tick_type_index])
+        return latest_market_timespan - timedelta(minutes=Environment.TESTING_MINUTES)
 
     def _increment_tick_type_index(self):
         self.current_tick_type_index += 1

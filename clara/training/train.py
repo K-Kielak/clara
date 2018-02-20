@@ -82,7 +82,9 @@ def main():
 
     saver = tf.train.Saver()
 
-    with tf.Session() as sess, tf.summary.FileWriter(TENSORBOARD_DATA_PATH, sess.graph) as summary_writer:
+    with tf.Session() as sess, tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/train', sess.graph) as train_writer, \
+            tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/test', sess.graph) as test_writer:
+
         logging.info('Starting training session...')
         sess.run(tf.global_variables_initializer())
 
@@ -93,7 +95,9 @@ def main():
 
         # pre-training random steps to gather initial experience
         for _ in range(PRE_TRAIN_STEPS):
-            initial_state = environment.get_curr_state_vector()
+            initial_state, is_test = environment.get_curr_state_vector()
+            while is_test:  # skip states used for testing so agent does not see them
+                initial_state, is_test = environment.get_curr_state_vector()
             action = random.choice(list(Position))
             reward, following_state = environment.make_action(action)
             experience_memory.add(initial_state, action.value, reward, following_state)
@@ -123,12 +127,13 @@ def main():
         step_summaries = tf.summary.merge(step_summaries + [reward_summary])
 
         # proper training
-        for i in range(NUM_STEPS):
-            if i < ANNEALING_STEPS:
+        train_step = 0
+        while train_step < NUM_STEPS:
+            if train_step < ANNEALING_STEPS:
                 epsilon -= eps_drop
 
             # make action
-            initial_state = environment.get_curr_state_vector()
+            initial_state, is_test = environment.get_curr_state_vector()
             action, estimated_q = dqn.get_online_network_output(initial_state, sess)
             total_estimated_q = [total_q + new_q for total_q, new_q in zip(total_estimated_q, estimated_q)]
             positions_count = [count + new_pos for count, new_pos in zip(positions_count, action.value)]
@@ -137,7 +142,9 @@ def main():
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
-            experience_memory.add(initial_state, action.value, reward, following_state)
+            if not is_test:
+                train_step += 1
+                experience_memory.add(initial_state, action.value, reward, following_state)
 
             _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
             if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE:
@@ -145,34 +152,37 @@ def main():
                              .format(estimated_q, next_estimated_q))
 
             # update online DQN
-            if i % TRAINING_FREQUENCY == 0:
+            if train_step % TRAINING_FREQUENCY == 0 and not is_test:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
                 loss, summary = dqn.train(train_batch, sess)
                 total_loss += loss
-                summary_writer.add_summary(summary, i)
+                train_writer.add_summary(summary, train_step)
 
             # copy online DQN parameters to the target DQN
-            if i % TARGET_UPDATE_FREQUENCY == 0:
+            if train_step % TARGET_UPDATE_FREQUENCY == 0:
                 dqn.copy_online_to_target(sess)
 
             # save model
-            if (i + 1) % SAVING_FREQUENCY == 0:
+            if (train_step + 1) % SAVING_FREQUENCY == 0:
                 logging.info('Saving model\n')
-                saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, i))
+                saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, train_step))
 
             # add summaries
             summary = sess.run(step_summaries, feed_dict={
                 reward_placeholder: reward,
                 q_values_placeholder: estimated_q
             })
-            summary_writer.add_summary(summary, i)
+            if is_test:
+                test_writer.add_summary(summary, train_step)
+            else:
+                train_writer.add_summary(summary, train_step)
 
             # print training stats
-            if i % TRAINING_STATS_FREQUENCY == 0:
-                logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, i))
+            if train_step % TRAINING_STATS_FREQUENCY == 0:
+                logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, train_step))
 
                 logging.info('Total reward so far: {}'.format(total_reward))
-                logging.info('Average total reward: {}'.format(total_reward / (i + 1)))
+                logging.info('Average total reward: {}'.format(total_reward / (train_step + 1)))
                 new_reward = total_reward - last_total_reward
                 logging.info('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
                 logging.info('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
@@ -194,7 +204,7 @@ def main():
 
                 new_estimated_q = [total_q - last_q for total_q, last_q in zip(total_estimated_q, last_estimated_q)]
                 logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
-                             .format([total_q / (i + 1) for total_q in total_estimated_q]))
+                             .format([total_q / (train_step + 1) for total_q in total_estimated_q]))
                 logging.info('Average estimated Q over the last {} steps: {}'
                              .format(TRAINING_STATS_FREQUENCY, [new_q / TRAINING_STATS_FREQUENCY for new_q in new_estimated_q]))
 
@@ -204,7 +214,7 @@ def main():
                              .format(TRAINING_STATS_FREQUENCY, new_positions_count))
                 last_positions_count = positions_count
 
-                logging.info('Average loss so far: {}'.format(total_loss / (i + 1)))
+                logging.info('Average loss so far: {}'.format(total_loss / (train_step + 1)))
                 logging.info('Average loss over the last {} steps: {}'
                              .format(TRAINING_STATS_FREQUENCY, (total_loss - last_loss) / TRAINING_STATS_FREQUENCY))
 
