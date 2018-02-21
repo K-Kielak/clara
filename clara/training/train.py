@@ -29,7 +29,8 @@ TRAINING_BATCH_SIZE = 50  # How many experiences to use for each training step
 TRAINING_FREQUENCY = 5  # How many actions before performing one training step
 NUM_STEPS = 8000000  # How many steps to perform for training session
 TARGET_UPDATE_FREQUENCY = 10000  # How many steps before updating target network
-TRAINING_STATS_FREQUENCY = 10000  # How many steps before next training stats print
+TRAINING_LOGS_FREQUENCY = 10000  # How many steps before next training stats print
+TRAINING_SUMMARY_FREQUENCY = 1000  # How many steps before new DQN training summary is saved (to save space)
 
 DISCOUNT_RATE = 0.99  # Discount factor on the future, expected Q values
 LEARNING_RATE = 0.00001  # Learning rate of the DQN
@@ -151,12 +152,24 @@ def main():
                 logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
                              .format(estimated_q, next_estimated_q))
 
+            # add decision summaries (q-values and rewards)
+            summary = sess.run(step_summaries, feed_dict={
+                reward_placeholder: reward,
+                q_values_placeholder: estimated_q
+            })
+            if is_test:
+                test_writer.add_summary(summary, train_step)
+            else:
+                train_writer.add_summary(summary, train_step)
+
             # update online DQN
             if train_step % TRAINING_FREQUENCY == 0 and not is_test:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
                 loss, summary = dqn.train(train_batch, sess)
                 total_loss += loss
-                train_writer.add_summary(summary, train_step)
+                # add training summary
+                if train_step % TRAINING_SUMMARY_FREQUENCY < TRAINING_FREQUENCY:
+                    train_writer.add_summary(summary, train_step)
 
             # copy online DQN parameters to the target DQN
             if train_step % TARGET_UPDATE_FREQUENCY == 0:
@@ -167,30 +180,20 @@ def main():
                 logging.info('Saving model\n')
                 saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, train_step))
 
-            # add summaries
-            summary = sess.run(step_summaries, feed_dict={
-                reward_placeholder: reward,
-                q_values_placeholder: estimated_q
-            })
-            if is_test:
-                test_writer.add_summary(summary, train_step)
-            else:
-                train_writer.add_summary(summary, train_step)
-
             # print training stats
-            if train_step % TRAINING_STATS_FREQUENCY == 0:
+            if train_step % TRAINING_LOGS_FREQUENCY == 0:
                 logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, train_step))
 
                 logging.info('Total reward so far: {}'.format(total_reward))
                 logging.info('Average total reward: {}'.format(total_reward / (train_step + 1)))
                 new_reward = total_reward - last_total_reward
-                logging.info('Reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY, new_reward))
-                logging.info('Average reward over the last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
-                                                                                new_reward / TRAINING_STATS_FREQUENCY))
+                logging.info('Reward over the last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward))
+                logging.info('Average reward over the last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY,
+                                                                                new_reward / TRAINING_LOGS_FREQUENCY))
                 last_total_reward = total_reward
 
                 logging.info('Trades so far: {}'.format(environment.trades_so_far))
-                logging.info('Trades over last {} steps: {}'.format(TRAINING_STATS_FREQUENCY,
+                logging.info('Trades over last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY,
                                                                     environment.trades_so_far - last_trades_so_far))
                 logging.info('Average profitability over all trades: {}'.format(environment.average_trade_profitability))
                 total_profitability = environment.average_trade_profitability * environment.trades_so_far
@@ -206,17 +209,17 @@ def main():
                 logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
                              .format([total_q / (train_step + 1) for total_q in total_estimated_q]))
                 logging.info('Average estimated Q over the last {} steps: {}'
-                             .format(TRAINING_STATS_FREQUENCY, [new_q / TRAINING_STATS_FREQUENCY for new_q in new_estimated_q]))
+                             .format(TRAINING_LOGS_FREQUENCY, [new_q / TRAINING_LOGS_FREQUENCY for new_q in new_estimated_q]))
 
                 new_positions_count = [total - last for total, last in zip(positions_count, last_positions_count)]
                 logging.info('Total positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(positions_count))
                 logging.info('Positions chosen by clara [LONG, IDLE, SHORT] over the last {} steps : {}'
-                             .format(TRAINING_STATS_FREQUENCY, new_positions_count))
+                             .format(TRAINING_LOGS_FREQUENCY, new_positions_count))
                 last_positions_count = positions_count
 
                 logging.info('Average loss so far: {}'.format(total_loss / (train_step + 1)))
                 logging.info('Average loss over the last {} steps: {}'
-                             .format(TRAINING_STATS_FREQUENCY, (total_loss - last_loss) / TRAINING_STATS_FREQUENCY))
+                             .format(TRAINING_LOGS_FREQUENCY, (total_loss - last_loss) / TRAINING_LOGS_FREQUENCY))
 
                 last_estimated_q = total_estimated_q
                 logging.info('Epsilon: {}\n'.format(epsilon))
