@@ -61,10 +61,10 @@ def vector_summaries(vector):
 
 def main():
     logging.info('New training session starting')
-    logging.info('Pre Train Steps: {}, Memory Size: {}, Training Batch size: {}; Training Frequency {}, '
+    logging.info('Layers: {}, Pre Train Steps: {}, Memory Size: {}, Training Batch size: {}; Training Frequency {}, '
                  'Target Update Frequency: {}, Discount Rate {}, Learning Rate: {}, Start eps: {}, End eps: {}, '
                  'Annealing Steps: {}, Gradient Clip: {}, Lrelu Alpha: {}'
-                 .format(PRE_TRAIN_STEPS, MEMORY_SIZE, TRAINING_BATCH_SIZE, TRAINING_FREQUENCY,
+                 .format(LAYERS_SIZES, PRE_TRAIN_STEPS, MEMORY_SIZE, TRAINING_BATCH_SIZE, TRAINING_FREQUENCY,
                          TARGET_UPDATE_FREQUENCY, DISCOUNT_RATE, LEARNING_RATE, START_EPS, END_EPS, ANNEALING_STEPS,
                          DQN.GRADIENT_CLIP, DQN.LRELU_ALPHA))
     logging.info('.')
