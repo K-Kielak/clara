@@ -30,7 +30,7 @@ TRAINING_FREQUENCY = 5  # How many actions before performing one training step
 NUM_STEPS = 8000000  # How many steps to perform for training session
 TARGET_UPDATE_FREQUENCY = 10000  # How many steps before updating target network
 TRAINING_LOGS_FREQUENCY = 10000  # How many steps before next training stats print
-TRAINING_SUMMARY_FREQUENCY = 1000  # How many steps before new DQN training summary is saved (to save space)
+TRAINING_SUMMARY_FREQUENCY = 10000  # How many steps before new DQN training summary is saved (to save space)
 
 DISCOUNT_RATE = 0.99  # Discount factor on the future, expected Q values
 LEARNING_RATE = 0.00001  # Learning rate of the DQN
