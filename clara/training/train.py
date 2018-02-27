@@ -94,17 +94,6 @@ def main():
             ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
             saver.restore(sess, ckpt.model_checkpoint_path)
 
-        # pre-training random steps to gather initial experience
-        for _ in range(PRE_TRAIN_STEPS):
-            initial_state, is_test = environment.get_curr_state_vector()
-            while is_test:  # skip states used for testing so agent does not see them
-                initial_state, is_test = environment.get_curr_state_vector()
-            action = random.choice(list(Position))
-            reward, following_state = environment.make_action(action)
-            experience_memory.add(initial_state, action.value, reward, following_state)
-
-        logging.info('Pre train steps finished, starting proper training')
-
         # training stats and data initialization
         total_reward = 0
         last_total_reward = 0
@@ -129,6 +118,7 @@ def main():
 
         # proper training
         train_step = 0
+        test_step = 0
         while train_step < NUM_STEPS:
             if train_step < ANNEALING_STEPS:
                 epsilon -= eps_drop
@@ -143,27 +133,29 @@ def main():
 
             reward, following_state = environment.make_action(action)
             total_reward += reward
-            if not is_test:
-                train_step += 1
-                experience_memory.add(initial_state, action.value, reward, following_state)
 
-            _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
-            if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE:
-                logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
-                             .format(estimated_q, next_estimated_q))
-
-            # add decision summaries (q-values and rewards)
             summary = sess.run(step_summaries, feed_dict={
                 reward_placeholder: reward,
                 q_values_placeholder: estimated_q
             })
+
             if is_test:
-                test_writer.add_summary(summary, train_step)
+                test_writer.add_summary(summary, train_step + test_step)
+                test_step += 1
             else:
-                train_writer.add_summary(summary, train_step)
+                test_step = 0
+                train_step += 1
+                experience_memory.add(initial_state, action.value, reward, following_state)
+                if train_step % TRAINING_SUMMARY_FREQUENCY == 0:
+                    train_writer.add_summary(summary, train_step)
+
+            _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
+            if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE and train_step > PRE_TRAIN_STEPS:
+                logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
+                             .format(estimated_q, next_estimated_q))
 
             # update online DQN
-            if train_step % TRAINING_FREQUENCY == 0 and not is_test:
+            if train_step % TRAINING_FREQUENCY == 0 and train_step > PRE_TRAIN_STEPS and not is_test:
                 train_batch = experience_memory.get_samples(TRAINING_BATCH_SIZE)
                 loss, summary = dqn.train(train_batch, sess)
                 total_loss += loss
