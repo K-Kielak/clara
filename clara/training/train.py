@@ -123,7 +123,9 @@ def main():
         # proper training
         train_step = 0
         test_step = 0
+        total_steps = 0
         while train_step < NUM_STEPS:
+            total_steps += 1
             if train_step < ANNEALING_STEPS:
                 epsilon -= eps_drop
 
@@ -185,11 +187,11 @@ def main():
                 saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_SAVE_PATH, train_step))
 
             # print training stats
-            if train_step % TRAINING_LOGS_FREQUENCY == 0:
-                logging.info('Step: {}'.format(train_step))
+            if total_steps % TRAINING_LOGS_FREQUENCY == 0:
+                logging.info('Step: {}'.format(total_steps))
 
                 logging.info('Total reward so far: {}'.format(total_reward))
-                logging.info('Average total reward: {}'.format(total_reward / (train_step + 1)))
+                logging.info('Average total reward: {}'.format(total_reward / (total_steps)))
                 new_reward = total_reward - last_total_reward
                 logging.info('Reward over the last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward))
                 logging.info('Average reward over the last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY,
@@ -211,7 +213,7 @@ def main():
 
                 new_estimated_q = [total_q - last_q for total_q, last_q in zip(total_estimated_q, last_estimated_q)]
                 logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
-                             .format([total_q / (train_step + 1) for total_q in total_estimated_q]))
+                             .format([total_q / (total_steps) for total_q in total_estimated_q]))
                 logging.info('Average estimated Q over the last {} steps: {}'
                              .format(TRAINING_LOGS_FREQUENCY, [new_q / TRAINING_LOGS_FREQUENCY for new_q in new_estimated_q]))
 
@@ -221,7 +223,7 @@ def main():
                              .format(TRAINING_LOGS_FREQUENCY, new_positions_count))
                 last_positions_count = positions_count
 
-                logging.info('Average loss so far: {}'.format(total_loss / (train_step + 1)))
+                logging.info('Average loss so far: {}'.format(total_loss / (total_steps)))
                 logging.info('Average loss over the last {} steps: {}'
                              .format(TRAINING_LOGS_FREQUENCY, (total_loss - last_loss) / TRAINING_LOGS_FREQUENCY))
 
