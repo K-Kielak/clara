@@ -24,7 +24,7 @@ STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to 
 LAYERS_SIZES = [600, 400]
 MEMORY_SIZE = 50000  # How many experiences to keep in the memory; 250000 ~= 4GB
 
-PRE_TRAIN_STEPS = 25000  # How many steps of random actions before training begins
+PRE_TRAIN_STEPS = 25000  # How many steps before training begins, it should be at least TRAINING_BATCH_SIZE
 TRAINING_BATCH_SIZE = 50  # How many experiences to use for each training step
 TRAINING_FREQUENCY = 5  # How many actions before performing one training step
 NUM_STEPS = 8000000  # How many steps to perform for training session
@@ -174,7 +174,7 @@ def main():
 
             # print training stats
             if train_step % TRAINING_LOGS_FREQUENCY == 0:
-                logging.info('Step (after {} pre training steps): {}'.format(PRE_TRAIN_STEPS, train_step))
+                logging.info('Step: {}'.format(train_step))
 
                 logging.info('Total reward so far: {}'.format(total_reward))
                 logging.info('Average total reward: {}'.format(total_reward / (train_step + 1)))
