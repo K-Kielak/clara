@@ -105,27 +105,27 @@ def _create_dqn_model(state_vector_size, layers_sizes, outputs, trainable=True, 
 
     with tf.name_scope(name + '-hidden-layer0'):
         with tf.name_scope('weights'):
-            weights.append(_generate_random_weights([state_vector_size, layers_sizes[0]], trainable))
+            weights.append(_generate_random_weights([state_vector_size, layers_sizes[0]], trainable, name))
             variable_summaries(weights[0])
         with tf.name_scope('biases'):
-            biases.append(_generate_random_biases([layers_sizes[0]], trainable))
+            biases.append(_generate_random_biases([layers_sizes[0]], trainable, name))
             variable_summaries(biases[0])
 
     for i in range(1, len(layers_sizes)):
         with tf.name_scope(name + '-hidden-layer' + str(i)):
             with tf.name_scope('weights'):
-                weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable))
+                weights.append(_generate_random_weights([layers_sizes[i - 1], layers_sizes[i]], trainable, name))
                 variable_summaries(weights[i])
             with tf.name_scope('biases'):
-                biases.append(_generate_random_biases([layers_sizes[i]], trainable))
+                biases.append(_generate_random_biases([layers_sizes[i]], trainable, name))
                 variable_summaries(biases[i])
 
     with tf.name_scope(name + '-output-layer'):
         with tf.name_scope('weights'):
-            weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable))
+            weights.append(_generate_random_weights([layers_sizes[-1], outputs], trainable, name))
             variable_summaries(weights[-1])
         with tf.name_scope('biases'):
-            biases.append(_generate_random_biases([outputs], trainable))
+            biases.append(_generate_random_biases([outputs], trainable, name))
             variable_summaries(biases[-1])
 
     return weights, biases
@@ -149,10 +149,10 @@ def _model_output(input, weights, biases):
     return output
 
 
-def _generate_random_weights(size, trainable):
-    return tf.Variable(tf.truncated_normal(size, stddev=0.00001, dtype=tf.float64), trainable=trainable)
+def _generate_random_weights(size, trainable, name):
+    return tf.Variable(tf.truncated_normal(size, stddev=0.00001, dtype=tf.float64), trainable=trainable, name=name)
 
 
-def _generate_random_biases(size, trainable):
+def _generate_random_biases(size, trainable, name):
     return tf.Variable(tf.truncated_normal(size, stddev=0.00001, mean=0.00003, dtype=tf.float64),
-                       trainable=trainable, dtype=tf.float64)
+                       trainable=trainable, name=name, dtype=tf.float64)
