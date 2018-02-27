@@ -94,7 +94,7 @@ def main():
             ckpt = tf.train.get_checkpoint_state(MODEL_LOAD_PATH)
             saver.restore(sess, ckpt.model_checkpoint_path)
 
-        # training stats and data initialization
+        # training stats initialization
         total_reward = 0
         last_total_reward = 0
         last_trades_so_far = 0
@@ -105,9 +105,13 @@ def main():
         last_positions_count = [0, 0, 0]
         total_loss = 0
         last_loss = 0
+
+        # data initialization
         eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
         epsilon = START_EPS
-
+        average_estimated_q = [0, 0, 0]
+        average_reward = 0
+        last_train_summaries_save = 0
         with tf.name_scope('reward'):
             reward_placeholder = tf.placeholder(tf.float64, shape=(), name='reward')
             reward_summary = tf.summary.scalar('value', reward_placeholder)
@@ -134,20 +138,28 @@ def main():
             reward, following_state = environment.make_action(action)
             total_reward += reward
 
-            summary = sess.run(step_summaries, feed_dict={
-                reward_placeholder: reward,
-                q_values_placeholder: estimated_q
-            })
-
-            if is_test:
+            if is_test:  # save all rewards and qs for testing
+                summary = sess.run(step_summaries, feed_dict={
+                    reward_placeholder: reward,
+                    q_values_placeholder: estimated_q
+                })
                 test_writer.add_summary(summary, train_step + test_step)
                 test_step += 1
-            else:
+            else:  # save only averages once in a while for training
                 test_step = 0
                 train_step += 1
                 experience_memory.add(initial_state, action.value, reward, following_state)
                 if train_step % TRAINING_SUMMARY_FREQUENCY == 0:
+                    summary = sess.run(step_summaries, feed_dict={
+                        reward_placeholder: average_reward,
+                        q_values_placeholder: average_estimated_q
+                    })
                     train_writer.add_summary(summary, train_step)
+                    last_train_summaries_save = train_step
+                else:
+                    average_reward = average_reward + (reward - average_reward)/(train_step-last_train_summaries_save)
+                    average_estimated_q = [average_q + (q - average_q)/(train_step-last_train_summaries_save)
+                                           for (average_q, q) in zip(average_estimated_q, estimated_q)]
 
             _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
             if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE and train_step > PRE_TRAIN_STEPS:
