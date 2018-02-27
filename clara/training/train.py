@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(message)s',
                     handlers=[logging.FileHandler('training.log'), logging.StreamHandler(sys.stdout)])
 
-LOADING_MODEL = False
-MODEL_PATH = './claradqn'
+MODEL_LOAD_PATH = None  # Set it if you want to load already trained model
+MODEL_SAVE_PATH = './claradqn'
 SAVING_FREQUENCY = 500000
 TENSORBOARD_DATA_PATH = './tensorboard'
 
@@ -89,9 +89,9 @@ def main():
         logging.info('Starting training session...')
         sess.run(tf.global_variables_initializer())
 
-        if LOADING_MODEL:
+        if MODEL_LOAD_PATH:
             print('Loading Model...')
-            ckpt = tf.train.get_checkpoint_state(MODEL_PATH)
+            ckpt = tf.train.get_checkpoint_state(MODEL_LOAD_PATH)
             saver.restore(sess, ckpt.model_checkpoint_path)
 
         # training stats and data initialization
