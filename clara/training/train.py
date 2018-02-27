@@ -170,7 +170,7 @@ def main():
             # save model
             if (train_step + 1) % SAVING_FREQUENCY == 0:
                 logging.info('Saving model\n')
-                saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, train_step))
+                saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_SAVE_PATH, train_step))
 
             # print training stats
             if train_step % TRAINING_LOGS_FREQUENCY == 0:
@@ -216,7 +216,7 @@ def main():
                 last_estimated_q = total_estimated_q
                 logging.info('Epsilon: {}\n'.format(epsilon))
 
-        saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_PATH, NUM_STEPS))
+        saver.save(sess, '{}/model-{}.ckpt'.format(MODEL_SAVE_PATH, NUM_STEPS))
 
 
 if __name__ == '__main__':
