@@ -137,12 +137,14 @@ def main():
             if random.random() < epsilon:
                 action = random.choice(list(Position))
 
-            reward, following_state = environment.make_action(action)
-            total_reward += reward
+            rewards, following_states = environment.make_action(action)
+            real_reward = [action_value * reward for action_value, reward in zip(action.value, rewards)
+                           if action_value == 1][0]
+            total_reward += real_reward
 
             if is_test:  # save all rewards and qs for testing
                 summary = sess.run(step_summaries, feed_dict={
-                    reward_placeholder: reward,
+                    reward_placeholder: real_reward,
                     q_values_placeholder: estimated_q
                 })
                 test_writer.add_summary(summary, train_step + test_step)
@@ -150,7 +152,9 @@ def main():
             else:  # save only averages once in a while for training
                 test_step = 0
                 train_step += 1
-                experience_memory.add(initial_state, action.value, reward, following_state)
+                for i, position in enumerate(Position):
+                    experience_memory.add(initial_state, position.value, rewards[i], following_states[i])
+
                 if train_step % TRAINING_SUMMARY_FREQUENCY == 0:
                     summary = sess.run(step_summaries, feed_dict={
                         reward_placeholder: average_reward,
@@ -158,15 +162,12 @@ def main():
                     })
                     train_writer.add_summary(summary, train_step)
                     last_train_summaries_save = train_step
+                    average_reward = 0
+                    average_estimated_q = [0, 0, 0]
                 else:
-                    average_reward = average_reward + (reward - average_reward)/(train_step-last_train_summaries_save)
+                    average_reward = average_reward + (real_reward - average_reward)/(train_step-last_train_summaries_save)
                     average_estimated_q = [average_q + (q - average_q)/(train_step-last_train_summaries_save)
                                            for (average_q, q) in zip(average_estimated_q, estimated_q)]
-
-            _, next_estimated_q = dqn.get_online_network_output(following_state, sess)
-            if abs(max(estimated_q) - max(next_estimated_q)) < DANGEROUS_Q_DIFFERENCE and train_step > PRE_TRAIN_STEPS:
-                logging.info('Dangerous Q difference between states - Q1: {}; Q2: {}'
-                             .format(estimated_q, next_estimated_q))
 
             # update online DQN
             if train_step % TRAINING_FREQUENCY == 0 and train_step > PRE_TRAIN_STEPS and not is_test:

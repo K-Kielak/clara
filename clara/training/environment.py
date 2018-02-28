@@ -49,7 +49,7 @@ class Environment(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.dao.close()
 
-    def get_curr_state_vector(self):
+    def get_curr_state_vector(self, imaginary_position=None):
         current_state = self.loaded_market_data[0]
         ticks = current_state[TICKS_LABEL]
         ema = current_state[EMA_LABEL]
@@ -60,34 +60,34 @@ class Environment(object):
         for t in ticks:
             state_vector.extend(t.values())
 
-        state_vector.extend(self.current_agent_position.value)
+        if imaginary_position:
+            state_vector.extend(imaginary_position.value)
+        else:
+            state_vector.extend(self.current_agent_position.value)
+
         return state_vector, self.is_test
 
     def make_action(self, new_agent_position):
-        # data needed for logging
-        start_timespan = self.loaded_market_data[0][TIMESPAN_LABEL]
-        end_timespan = self.loaded_market_data[1][TIMESPAN_LABEL]
-        starting_position = self.current_agent_position
-
-        reward = 0
         # process action ###
         current_coin_price = self._get_current_price()
-        # apply transaction fees and update coin_price_at_last_change)
-        if self.current_agent_position.exits_trade(new_agent_position):
-            coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
-            percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
-            percentage_earned_over_trade = self.current_agent_position.get_multiplier() * percentage_change_over_trade
-            total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade) / 100
-            total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
-            reward -= total_fee
+        # calculate transaction fees for all possible actions
+        coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
+        percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
+        percentage_earned_over_trade = self.current_agent_position.get_multiplier() * percentage_change_over_trade
+        total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade) / 100
+        total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
+        exit_fees = [total_fee if self.current_agent_position.exits_trade(position) else 0 for position in Position]
+        enter_fees = [self.exchange_transaction_fee if self.current_agent_position.enters_trade(position) else 0
+                      for position in Position]
 
+        # save log data if agent exits/enters trade in reality
+        if self.current_agent_position.exits_trade(new_agent_position):
             self.trades_so_far += 1
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
             distance_from_average = trade_profitability - self.average_trade_profitability
             self.average_trade_profitability += distance_from_average / self.trades_so_far
 
         if self.current_agent_position.enters_trade(new_agent_position):
-            reward -= self.exchange_transaction_fee
             self.coin_price_at_last_entry = current_coin_price
             self.timespan_of_last_entry = self.loaded_market_data[0][TIMESPAN_LABEL]
 
@@ -105,22 +105,18 @@ class Environment(object):
         coin_price_change = current_coin_price - previous_coin_price
         percentage_change = (100 * coin_price_change) / self.coin_price_at_last_entry
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
-        reward += self.current_agent_position.get_multiplier() * percentage_change
-        following_state_vector, _ = self.get_curr_state_vector()
+        market_rewards = [position.get_multiplier() * percentage_change for position in Position]
+        following_states = [self.get_curr_state_vector(imaginary_position=position) for position in Position]
+        following_states = [state for state, _ in following_states]
+
+        total_rewards = []
+        for i in range(len(Position)):
+            total_rewards.append(market_rewards[i] - enter_fees[i] - exit_fees[i])
 
         if len(self.loaded_market_data) == 1:
             self._update_market_data_batch(last_state=self.loaded_market_data[0])
 
-        if abs(reward) > 20:
-            logging.warning('From {} to {}'.format(start_timespan, end_timespan))
-            logging.warning('Unusual reward: {}'.format(reward))
-            logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
-            logging.warning('Change in price: {} to {}'.format(previous_coin_price, current_coin_price))
-            logging.warning('Trade entered at {} with coin price: {}\n'.format(self.timespan_of_last_entry,
-                                                                               self.coin_price_at_last_entry))
-            reward = 0
-
-        return reward, following_state_vector
+        return total_rewards, following_states
 
     def _get_current_price(self,):
         current_state = self.loaded_market_data[0]
