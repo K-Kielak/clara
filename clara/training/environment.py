@@ -68,6 +68,11 @@ class Environment(object):
         return state_vector, self.is_test
 
     def make_action(self, new_agent_position):
+        # data needed for logging
+        start_timespan = self.loaded_market_data[0][TIMESPAN_LABEL]
+        end_timespan = self.loaded_market_data[1][TIMESPAN_LABEL]
+        starting_position = self.current_agent_position
+
         # process action ###
         current_coin_price = self._get_current_price()
         # calculate transaction fees for all possible actions
@@ -112,6 +117,14 @@ class Environment(object):
         total_rewards = []
         for i in range(len(Position)):
             total_rewards.append(market_rewards[i] - enter_fees[i] - exit_fees[i])
+            if total_rewards[i] > 20:
+                logging.warning('From {} to {}'.format(start_timespan, end_timespan))
+                logging.warning('Unusual reward: {}'.format(total_rewards[i]))
+                logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
+                logging.warning('Change in price: {} to {}'.format(previous_coin_price, current_coin_price))
+                logging.warning('Trade entered at {} with coin price: {}\n'.format(self.timespan_of_last_entry,
+                                                                                   self.coin_price_at_last_entry))
+                total_rewards[i] = 0
 
         if len(self.loaded_market_data) == 1:
             self._update_market_data_batch(last_state=self.loaded_market_data[0])

@@ -138,8 +138,7 @@ def main():
                 action = random.choice(list(Position))
 
             rewards, following_states = environment.make_action(action)
-            real_reward = [action_value * reward for action_value, reward in zip(action.value, rewards)
-                           if action_value == 1][0]
+            real_reward = [reward for action_value, reward in zip(action.value, rewards) if action_value == 1][0]
             total_reward += real_reward
 
             if is_test:  # save all rewards and qs for testing
