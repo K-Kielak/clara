@@ -67,14 +67,18 @@ class Environment(object):
 
         return state_vector, self.is_test
 
-    def make_action(self, new_agent_position):
+    def make_action(self, new_agent_position, trade_writer=None):
         # data needed for logging
         start_timespan = self.loaded_market_data[0][TIMESPAN_LABEL]
         end_timespan = self.loaded_market_data[1][TIMESPAN_LABEL]
         starting_position = self.current_agent_position
 
-        # process action ###
         current_coin_price = self._get_current_price()
+        if trade_writer:
+            current_market = self.tick_types[self.current_tick_type_index]
+            trade_writer.writerow([current_market, start_timespan, current_coin_price, new_agent_position])
+
+        # process action ###
         # calculate transaction fees for all possible actions
         coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
         percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
@@ -131,7 +135,7 @@ class Environment(object):
 
         return total_rewards, following_states
 
-    def _get_current_price(self,):
+    def _get_current_price(self):
         current_state = self.loaded_market_data[0]
         ema = current_state[EMA_LABEL]
         if ema > 10**3:

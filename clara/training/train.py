@@ -1,3 +1,4 @@
+import csv
 import logging
 import os
 import random
@@ -9,19 +10,22 @@ from clara.agent.experience_memory import Memory
 from clara.training.environment import Environment
 
 
+# Data saving configs
+DATA_DIRECTORY = './training'
+os.mkdir(DATA_DIRECTORY)
+MODEL_LOAD_PATH = None  # Set it if you want to load already trained model
+MODEL_SAVE_PATH = DATA_DIRECTORY + '/dqn-model'
+SAVING_FREQUENCY = 500000
+TENSORBOARD_DATA_PATH = DATA_DIRECTORY + '/tensorboard'
+TENSORBOARD_SAVING_FREQUENCY = 10000  # How many steps before new DQN Tensorboard training summary is saved
+TRADES_FILE_PATH = DATA_DIRECTORY + '/trades.csv'
+
 # Logging configs
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(message)s',
-                    handlers=[logging.FileHandler('training.log'), logging.StreamHandler(sys.stdout)])
+                    handlers=[logging.FileHandler(DATA_DIRECTORY + '/logs.log'), logging.StreamHandler(sys.stdout)])
 TRAINING_LOGS_FREQUENCY = 1440  # How many steps before next training stats print
 DANGEROUS_Q_DIFFERENCE = 1e-8
-
-# Data saving configs
-MODEL_LOAD_PATH = None  # Set it if you want to load already trained model
-MODEL_SAVE_PATH = './claradqn'
-SAVING_FREQUENCY = 500000
-TENSORBOARD_DATA_PATH = './tensorboard'
-TENSORBOARD_SAVING_FREQUENCY = 10000  # How many steps before new DQN Tensorboard training summary is saved
 
 # DQN parameters
 OUTPUTS = 3  # Three values for 3 different actions
@@ -98,14 +102,20 @@ class AgentTrainer(object):
 
     def train(self):
         self.log_training_start_info()
-        with tf.Session() as sess, tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/train', sess.graph) as train_writer, \
-                tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/test', sess.graph) as test_writer:
+        with tf.Session() as sess, \
+                tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/train', sess.graph) as train_writer, \
+                tf.summary.FileWriter(TENSORBOARD_DATA_PATH + '/test', sess.graph) as test_writer, \
+                open(TRADES_FILE_PATH, 'w', newline='') as trades_file:
+            trades_writer = csv.writer(trades_file, delimiter=';')
+            trades_writer.writerow(['Market', 'Timespan', 'Coin Price', 'Action Made'])
+
             logging.info('Starting training session...')
             sess.run(tf.global_variables_initializer())
             if MODEL_LOAD_PATH:
                 self.load_model(sess, MODEL_LOAD_PATH)
 
             # Data initialization
+
             eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
             self.epsilon = START_EPS
 
@@ -114,7 +124,7 @@ class AgentTrainer(object):
                 if self.train_steps < ANNEALING_STEPS:
                     self.epsilon -= eps_drop
 
-                initial_state, is_test, action, estimated_q, rewards, following_states = self.make_action(sess)
+                initial_state, is_test, action, estimated_q, rewards, following_states = self.make_action(sess, trades_writer)
                 for i, action in enumerate(Position):
                     self.experience_memory.add(initial_state, action.value, rewards[i], following_states[i])
 
@@ -147,7 +157,7 @@ class AgentTrainer(object):
         ckpt = tf.train.get_checkpoint_state(load_path)
         self.saver.restore(sess, ckpt.model_checkpoint_path)
 
-    def make_action(self, sess):
+    def make_action(self, sess, trades_writer):
         # make action
         initial_state, is_test = self.environment.get_curr_state_vector()
         action, estimated_q = self.dqn.get_online_network_output(initial_state, sess)
@@ -156,8 +166,8 @@ class AgentTrainer(object):
         if random.random() < self.epsilon:
             action = random.choice(list(Position))
 
-        reward, following_state = self.environment.make_action(action)
-        return initial_state, is_test, action, estimated_q, reward, following_state
+        rewards, following_states = self.environment.make_action(action, trade_writer=trades_writer)
+        return initial_state, is_test, action, estimated_q, rewards, following_states
 
     def update_test_summaries(self, test_writer, sess, reward, estimated_q):
         # Save all rewards and qs for testing

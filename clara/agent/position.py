@@ -6,6 +6,9 @@ class Position(Enum):
     IDLE = [0, 1, 0]
     SHORT = [0, 0, 1]
 
+    def get_name(self):
+        return next(name for name, value in Position.items() if self.value == value)
+
     def get_multiplier(self):
         if self == Position.LONG:
             return 1
