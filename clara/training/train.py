@@ -116,12 +116,13 @@ class AgentTrainer(object):
 
             # Data initialization
 
+            is_test = False
             eps_drop = (START_EPS - END_EPS) / ANNEALING_STEPS
             self.epsilon = START_EPS
 
-            while self.train_steps < NUM_STEPS:
+            while self.total_steps < NUM_STEPS:
                 self.total_steps += 1
-                if self.train_steps < ANNEALING_STEPS:
+                if self.train_steps < ANNEALING_STEPS and not is_test:
                     self.epsilon -= eps_drop
 
                 initial_state, is_test, action, estimated_q, rewards, following_states = self.make_action(sess, trades_writer)
