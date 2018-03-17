@@ -126,13 +126,12 @@ class AgentTrainer(object):
                     self.epsilon -= eps_drop
 
                 initial_state, is_test, action, estimated_q, reward, following_state = self.make_action(sess, trades_writer)
-                self.experience_memory.add(initial_state, action.value, reward, following_state)
                 self.total_reward += reward
-
-                if is_test:
-                    self.update_test_summaries(test_writer, sess, reward, estimated_q)
-                else:
+                if not is_test:
+                    self.experience_memory.add(initial_state, action.value, reward, following_state)
                     self.update_train_summaries(train_writer, sess, reward, estimated_q)
+                else:
+                    self.update_test_summaries(test_writer, sess, reward, estimated_q)
 
                 if self.train_steps % TRAINING_FREQUENCY == 0 and self.train_steps > PRE_TRAIN_STEPS and not is_test:
                     summary = self.update_online_dqn(sess)
