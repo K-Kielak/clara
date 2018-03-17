@@ -24,7 +24,7 @@ TRADES_FILE_PATH = DATA_DIRECTORY + '/trades.csv'
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(message)s',
                     handlers=[logging.FileHandler(DATA_DIRECTORY + '/logs.log'), logging.StreamHandler(sys.stdout)])
-TRAINING_LOGS_FREQUENCY = 1440  # How many steps before next training stats print
+TRAINING_LOGS_FREQUENCY = 10000  # How many steps before next training stats print
 DANGEROUS_Q_DIFFERENCE = 1e-8
 
 # DQN parameters
@@ -75,7 +75,7 @@ class AgentTrainer(object):
             self.reward_placeholder = tf.placeholder(tf.float64, shape=(), name='reward')
             reward_summary = tf.summary.scalar('value', self.reward_placeholder)
         with tf.name_scope('q-values'):
-            self.q_values_placeholder = tf.placeholder(tf.float64, shape=([3,]), name='q-values')
+            self.q_values_placeholder = tf.placeholder(tf.float64, shape=([3, ]), name='q-values')
             step_summaries = self.summarize_vector(self.q_values_placeholder)
         self.step_summaries = tf.summary.merge(step_summaries + [reward_summary])
 
@@ -85,7 +85,6 @@ class AgentTrainer(object):
         self.average_reward = 0
         self.last_train_summaries_save = 0
         self.train_steps = 0
-        self.test_steps = 0
         self.total_steps = 0
 
         # Logging stats initialization
@@ -173,12 +172,10 @@ class AgentTrainer(object):
             self.reward_placeholder: reward,
             self.q_values_placeholder: estimated_q
         })
-        test_writer.add_summary(summary, self.train_steps + self.test_steps)
-        self.test_steps += 1
+        test_writer.add_summary(summary, self.total_steps)
 
     def update_train_summaries(self, train_writer, sess, reward, estimated_q):
         # Save only averages once in a while for training
-        self.test_steps = 0
         self.train_steps += 1
         if self.train_steps % TENSORBOARD_SAVING_FREQUENCY == 0:
             summary = sess.run(self.step_summaries, feed_dict={

@@ -25,18 +25,25 @@ class Environment(object):
         if not self.tick_types:
             raise ValueError('There are no states for given market_interval ({}) '
                              'in the database'.format(market_interval))
-        self.current_tick_type_index = 0
-        logging.info('starting market is ' + self.tick_types[self.current_tick_type_index])
 
+        self.current_market = self.tick_types[0]
         self.exchange_transaction_fee = exchange_transaction_fee
-        self.loaded_market_data = deque()
-        self.test_start_timespan = self._get_test_start_timespan_for_curr_market()
-        self.is_test = False
-        self.current_agent_position = Position.IDLE
+        self.loaded_market_data = {}
+        self.current_agent_positions = {}
+        self.coin_prices_at_last_entry = {}
+        self.test_start_timespans = {}
+        self.is_test = {}
+        for market in self.tick_types:
+            self.loaded_market_data[market] = deque()
+            self.current_agent_positions[market] = Position.IDLE
+            self.test_start_timespans[market] = self._get_test_start_timespan(market)
+            self.is_test[market] = False
+            self._update_market_data_batch(market)
+            self.coin_prices_at_last_entry[market] = self._get_current_price(market)
 
-        self._update_market_data_batch()
-        # reward is % of profit or loss based on starting_trade_price, updated each time agent enters the trade
-        self.coin_price_at_last_entry = self._get_current_price()
+        self.current_timespan = self._get_earliest_timespan()
+        self._change_market()
+        logging.info('Starting training from {}'.format(self.current_timespan))
 
         # data needed for logging
         self.average_trade_profitability = 0
@@ -50,37 +57,36 @@ class Environment(object):
         self.dao.close()
 
     def get_curr_state_vector(self):
-        current_state = self.loaded_market_data[0]
+        current_state = self.loaded_market_data[self.current_market][0]
         ticks = current_state[TICKS_LABEL]
         ema = current_state[EMA_LABEL]
-        if ema > 10**3:
-            ema /= 10**8
-
         state_vector = [ema]
         for t in ticks:
             state_vector.extend(t.values())
 
-        state_vector.extend(self.current_agent_position.value)
-        return state_vector, self.is_test
+        state_vector.extend(self.current_agent_positions[self.current_market].value)
+        return state_vector, self.is_test[self.current_market]
 
     def make_action(self, new_agent_position, trade_writer=None):
+        current_agent_position = self.current_agent_positions[self.current_market]
+        coin_price_at_last_entry = self.coin_prices_at_last_entry[self.current_market]
+
         # data needed for logging
-        start_timespan = self.loaded_market_data[0][TIMESPAN_LABEL]
-        end_timespan = self.loaded_market_data[1][TIMESPAN_LABEL]
-        starting_position = self.current_agent_position
+        start_timespan = self.loaded_market_data[self.current_market][0][TIMESPAN_LABEL]
+        end_timespan = self.loaded_market_data[self.current_market][1][TIMESPAN_LABEL]
+        starting_position = self.current_agent_positions[self.current_market]
 
         reward = 0
-        current_coin_price = self._get_current_price()
+        current_coin_price = self._get_current_price(self.current_market)
         if trade_writer:
-            current_market = self.tick_types[self.current_tick_type_index]
-            trade_writer.writerow([current_market, start_timespan, current_coin_price, new_agent_position])
+            trade_writer.writerow([self.current_market, start_timespan, current_coin_price, new_agent_position])
 
         # process action ###
         # apply transaction fees and update coin_price_at_last_change)
-        if self.current_agent_position.exits_trade(new_agent_position):
-            coin_price_change_over_trade = current_coin_price - self.coin_price_at_last_entry
-            percentage_change_over_trade = (100 * coin_price_change_over_trade) / self.coin_price_at_last_entry
-            percentage_earned_over_trade = self.current_agent_position.get_multiplier() * percentage_change_over_trade
+        if current_agent_position.exits_trade(new_agent_position):
+            coin_price_change_over_trade = current_coin_price - coin_price_at_last_entry
+            percentage_change_over_trade = (100 * coin_price_change_over_trade) / coin_price_at_last_entry
+            percentage_earned_over_trade = current_agent_position.get_multiplier() * percentage_change_over_trade
             total_percentage_owned = (100 - self.exchange_transaction_fee) * (100 + percentage_earned_over_trade) / 100
             total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
             reward -= total_fee
@@ -90,80 +96,96 @@ class Environment(object):
             distance_from_average = trade_profitability - self.average_trade_profitability
             self.average_trade_profitability += distance_from_average / self.trades_so_far
 
-        if self.current_agent_position.enters_trade(new_agent_position):
+        if current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
-            self.coin_price_at_last_entry = current_coin_price
-            self.timespan_of_last_entry = self.loaded_market_data[0][TIMESPAN_LABEL]
+            self.coin_prices_at_last_entry[self.current_market] = current_coin_price
 
         # update agent and the market ###
-        self.current_agent_position = new_agent_position
-        self.loaded_market_data.popleft()
-        if not self.is_test and self.loaded_market_data[0][TIMESPAN_LABEL] > self.test_start_timespan:
-            logging.info('Starting tests on {}'.format(self.tick_types[self.current_tick_type_index]))
-            self.is_test = True
+        self.current_agent_positions[self.current_market] = new_agent_position
+        self.loaded_market_data[self.current_market].popleft()
+        if not self.is_test[self.current_market] and self.current_timespan > self.test_start_timespans[self.current_market]:
+            logging.info('Starting tests on {}'.format(self.current_market))
+            self.is_test[self.current_market] = True
 
         previous_coin_price = current_coin_price
-        current_coin_price = self._get_current_price()
+        current_coin_price = self._get_current_price(self.current_market)
 
         # process new state consequences ###
         coin_price_change = current_coin_price - previous_coin_price
-        percentage_change = (100 * coin_price_change) / self.coin_price_at_last_entry
+        percentage_change = (100 * coin_price_change) / self.coin_prices_at_last_entry[self.current_market]
         # update reward according to market change and current agent position (SHORT, IDLE, or LONG)
-        reward += self.current_agent_position.get_multiplier() * percentage_change
+        reward += self.current_agent_positions[self.current_market].get_multiplier() * percentage_change
         following_state_vector, _ = self.get_curr_state_vector()
 
-        if len(self.loaded_market_data) == 1:
-            self._update_market_data_batch(last_state=self.loaded_market_data[0])
+        if len(self.loaded_market_data[self.current_market]) < 2:
+            self._update_market_data_batch(self.current_market)
+
+        self._change_market()
 
         if abs(reward) > 20:
             logging.warning('From {} to {}'.format(start_timespan, end_timespan))
             logging.warning('Unusual reward: {}'.format(reward))
-            logging.warning('Starting from {} ending at {}'.format(starting_position, self.current_agent_position))
+            logging.warning('Starting from {} ending at {}'
+                            .format(starting_position, self.current_agent_positions[self.current_market]))
             logging.warning('Change in price: {} to {}'.format(previous_coin_price, current_coin_price))
-            logging.warning('Trade entered at {} with coin price: {}\n'.format(self.timespan_of_last_entry,
-                                                                               self.coin_price_at_last_entry))
-            reward = 0
+            logging.warning('Trade entered at {} with coin price: {}\n'
+                            .format(self.timespan_of_last_entry, self.coin_prices_at_last_entry[self.current_market]))
 
         return reward, following_state_vector
 
-    def _get_current_price(self):
-        current_state = self.loaded_market_data[0]
+    def _get_current_price(self, market):
+        current_state = self.loaded_market_data[market][0]
         ema = current_state[EMA_LABEL]
-        if ema > 10**3:
-            ema /= 10**8
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
         current_price = ema*(current_price + 100)
-
         return current_price
 
-    def _update_market_data_batch(self, last_state=None):
+    def _update_market_data_batch(self, market):
         """
         Puts next batch of data from the states database in the loaded_market_data collection
         :param last_state: last state in the loaded_market_data collection
         """
         new_batch_start_time = None
-        if last_state:
-            new_batch_start_time = last_state[TIMESPAN_LABEL]
+        if self.loaded_market_data[market]:
+            new_batch_start_time = self.loaded_market_data[market][0][TIMESPAN_LABEL] + \
+                                   timedelta(minutes=self.interval_value)
 
-        states = self.dao.get_states(self.tick_types[self.current_tick_type_index],
-                                     starting_from=new_batch_start_time, limit=Environment.MAX_BATCH_SIZE)
+        max_size = int(Environment.MAX_BATCH_SIZE / len(self.tick_types))
+        states = self.dao.get_states(market, starting_from=new_batch_start_time, limit=max_size)
 
-        self.loaded_market_data = deque(states)
+        self.loaded_market_data[market].extend(states)
 
-        if len(self.loaded_market_data) <= 1:
-            self._increment_tick_type_index()
-            logging.info('market finished and changed to {}'.format(self.tick_types[self.current_tick_type_index]))
-            self.is_test = False
-            self.test_start_timespan = self._get_test_start_timespan_for_curr_market()  # update test start timespan
-            self.current_agent_position = Position.IDLE  # reset the agent when changing the market
-            self._update_market_data_batch()
+    def _change_market(self):
+        # check whether there is still market left with unprocessed data for the current timespan
+        for name, data in self.loaded_market_data.items():
+            if data[0][TIMESPAN_LABEL] == self.current_timespan and len(data) > 1:
+                self.current_market = name
+                return
 
-    def _get_test_start_timespan_for_curr_market(self):
-        latest_market_timespan = self.dao.get_latest_state_timespan(self.tick_types[self.current_tick_type_index])
+        # increment current timespan and find first better market matching it
+        self.current_timespan += timedelta(minutes=self.interval_value)
+        for name, data in self.loaded_market_data.items():
+            if data[0][TIMESPAN_LABEL] == self.current_timespan and len(data) > 1:
+                self.current_market = name
+                return
+
+        # If there is no market matching timespan even after it's incrementation it means we reached end of the data
+        # and we need to start from the beginning
+        logging.info('Data finished at {}'.format(self.current_timespan))
+        for market in self.tick_types:
+            self.loaded_market_data[market] = deque()
+            self._update_market_data_batch(market)
+
+        self.current_timespan = self._get_earliest_timespan()
+        self.current_agent_positions = {market: Position.IDLE for market in self.tick_types}
+        self._change_market()
+
+        logging.info('Staring again from the beginning at {}'.format(self.current_timespan))
+
+    def _get_earliest_timespan(self):
+        return min([market[0][TIMESPAN_LABEL] for market in self.loaded_market_data.values()])
+
+    def _get_test_start_timespan(self, market):
+        latest_market_timespan = self.dao.get_latest_state_timespan(market)
         return latest_market_timespan - timedelta(minutes=Environment.TESTING_MINUTES)
-
-    def _increment_tick_type_index(self):
-        self.current_tick_type_index += 1
-        if self.current_tick_type_index >= len(self.tick_types):
-            self.current_tick_type_index = 0
