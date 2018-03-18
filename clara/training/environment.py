@@ -96,7 +96,7 @@ class Environment(object):
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
             if trade_profitability < 0:
                 self.failed_trades += 1
-                self.total_loss += trade_profitability
+                self.total_loss -= trade_profitability
             else:
                 self.successful_trades += 1
                 self.total_profit += trade_profitability

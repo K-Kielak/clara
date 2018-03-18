@@ -28,8 +28,7 @@ TRAINING_LOGS_FREQUENCY = 10000  # How many steps before next training stats pri
 DANGEROUS_Q_DIFFERENCE = 1e-8
 
 # DQN parameters
-OUTPUTS = 3  # Three values for 3 different actions
-STATE_SIZE = 200*5 + 1 + OUTPUTS  # 200 are ticks, 1 is EMA, and OUTPUTS are to represent the previous action
+STATE_SIZE = 200*5 + 1 + len(Position)  # 200 are ticks, 1 is EMA + space to represent the previous action
 LAYERS_SIZES = [600, 400]
 
 # Training hyperparameters
@@ -59,7 +58,7 @@ if STATES_DB_URI_ENV not in os.environ:
 
 class AgentTrainer(object):
     def __init__(self):
-        self.dqn = DQN(STATE_SIZE, LAYERS_SIZES, OUTPUTS, LEARNING_RATE, DISCOUNT_RATE)
+        self.dqn = DQN(STATE_SIZE, LAYERS_SIZES, len(Position), LEARNING_RATE, DISCOUNT_RATE)
         self.experience_memory = Memory(MEMORY_SIZE)
         logging.info('Agent initialized')
 
@@ -75,7 +74,7 @@ class AgentTrainer(object):
             self.reward_placeholder = tf.placeholder(tf.float64, shape=(), name='reward')
             reward_summary = tf.summary.scalar('value', self.reward_placeholder)
         with tf.name_scope('q-values'):
-            self.q_values_placeholder = tf.placeholder(tf.float64, shape=([3, ]), name='q-values')
+            self.q_values_placeholder = tf.placeholder(tf.float64, shape=([len(Position), ]), name='q-values')
             step_summaries = self.summarize_vector(self.q_values_placeholder)
         self.step_summaries = tf.summary.merge(step_summaries + [reward_summary])
 
@@ -208,8 +207,8 @@ class AgentTrainer(object):
 
         logging.info('Total reward so far: {}'.format(self.total_reward))
         logging.info('Average total reward: {}'.format(self.total_reward / total_steps))
-        logging.info('Recent reward steps: {}'.format(new_reward))
-        logging.info('Recent average reward: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward / TRAINING_LOGS_FREQUENCY))
+        logging.info('Recent reward: {}'.format(new_reward))
+        logging.info('Average recent reward: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward / TRAINING_LOGS_FREQUENCY))
 
         self.last_total_reward = self.total_reward
 
@@ -229,8 +228,11 @@ class AgentTrainer(object):
                      .format(self.environment.successful_trades, self.environment.failed_trades))
         logging.info('Recent trades (Successful, Failed): ({}, {})'
                      .format(new_successful_trades, new_failed_trades))
-        logging.info('Total (Profit, Loss): ({}, {})'.format(self.environment.total_profit, self.environment.total_loss))
-        logging.info('Recent (Profit, Loss): ({}, {})'.format(new_total_profit, new_total_loss))
+        logging.info('Average (Profit, Loss): ({}, {})'
+                     .format(self.environment.total_profit / self.environment.successful_trades,
+                             self.environment.total_loss / self.environment.failed_trades))
+        logging.info('Recent average (Profit, Loss): ({}, {})'.format(new_total_profit / new_successful_trades,
+                                                                      new_total_loss / new_failed_trades))
         logging.info('Average profitability over all trades: {}'.format(average_trade_profitability))
         logging.info('Average profitability over last trades: {}'.format(new_average_profitability))
 
