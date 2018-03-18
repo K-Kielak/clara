@@ -91,8 +91,10 @@ class AgentTrainer(object):
         # Logging stats initialization
         self.total_reward = 0
         self.last_total_reward = 0
-        self.last_trades_so_far = 0
-        self.last_average_trade_profitability = 0
+        self.last_successful_trades = 0
+        self.last_failed_trades = 0
+        self.last_total_profit = 0
+        self.last_total_loss = 0
         self.total_estimated_q = [0, 0, 0]
         self.last_estimated_q = [0, 0, 0]
         self.positions_count = [0, 0, 0]
@@ -204,48 +206,67 @@ class AgentTrainer(object):
     def log_training_stats(self, total_steps):
         logging.info('Step: {}'.format(total_steps))
 
+        # Rewards data logging
+        new_reward = self.total_reward - self.last_total_reward
+
         logging.info('Total reward so far: {}'.format(self.total_reward))
         logging.info('Average total reward: {}'.format(self.total_reward / total_steps))
-        new_reward = self.total_reward - self.last_total_reward
-        logging.info('Reward over the last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward))
-        logging.info('Average reward over the last {} steps: {}'
-                     .format(TRAINING_LOGS_FREQUENCY, new_reward / TRAINING_LOGS_FREQUENCY))
+        logging.info('Recent reward steps: {}'.format(new_reward))
+        logging.info('Recent average reward: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward / TRAINING_LOGS_FREQUENCY))
+
         self.last_total_reward = self.total_reward
 
-        logging.info('Trades so far: {}'.format(self.environment.trades_so_far))
-        new_trades_so_far = self.environment.trades_so_far - self.last_trades_so_far
-        logging.info('Trades over last {} steps: {}'.format(TRAINING_LOGS_FREQUENCY, new_trades_so_far))
-        logging.info('Average profitability over all trades: {}'
-                     .format(self.environment.average_trade_profitability))
-        total_profitability = self.environment.average_trade_profitability * self.environment.trades_so_far
-        last_total_profitability = self.last_average_trade_profitability * self.last_trades_so_far
-        new_average_profitability = (total_profitability - last_total_profitability) / \
-                                    (self.environment.trades_so_far - self.last_trades_so_far + 1)
-        logging.info('Average profitability over last {} trades: {}'
-                     .format(new_trades_so_far, new_average_profitability))
-        self.last_average_trade_profitability = self.environment.average_trade_profitability
-        self.last_trades_so_far = self.environment.trades_so_far
+        # Trades data logging
+        new_successful_trades = self.environment.successful_trades - self.last_successful_trades
+        new_failed_trades = self.environment.failed_trades - self.last_failed_trades
+        new_total_profit = self.environment.total_profit - self.last_total_profit
+        new_total_loss = self.environment.total_loss - self.last_total_loss
+        total_profitability = self.environment.total_profit - self.environment.total_loss
+        new_total_profitability = total_profitability - (self.last_total_profit - self.last_total_loss)
+        average_trade_profitability = total_profitability / \
+                                      (self.environment.successful_trades + self.environment.failed_trades)
+        new_average_profitability = new_total_profitability / \
+                                    (new_successful_trades + new_failed_trades)
 
+        logging.info('Trades so far (Successful, Failed): ({}, {})'
+                     .format(self.environment.successful_trades, self.environment.failed_trades))
+        logging.info('Recent trades (Successful, Failed): ({}, {})'
+                     .format(new_successful_trades, new_failed_trades))
+        logging.info('Total (Profit, Loss): ({}, {})'.format(self.environment.total_profit, self.environment.total_loss))
+        logging.info('Recent (Profit, Loss): ({}, {})'.format(new_total_profit, new_total_loss))
+        logging.info('Average profitability over all trades: {}'.format(average_trade_profitability))
+        logging.info('Average profitability over last trades: {}'.format(new_average_profitability))
+
+        self.last_successful_trades = self.environment.successful_trades
+        self.last_failed_trades = self.environment.failed_trades
+        self.last_total_profit = self.environment.total_profit
+        self.last_total_loss = self.environment.total_loss
+
+        # Q-values data logging
         new_estimated_q = [total_q - last_q for total_q, last_q
                            in zip(self.total_estimated_q, self.last_estimated_q)]
-        logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
-                     .format([total_q / total_steps for total_q in self.total_estimated_q]))
         new_average_estimated_q = [new_q / TRAINING_LOGS_FREQUENCY for new_q in new_estimated_q]
-        logging.info('Average estimated Q over the last {} steps: {}'
-                     .format(TRAINING_LOGS_FREQUENCY, new_average_estimated_q))
-
         new_positions_count = [total - last for total, last
                                in zip(self.positions_count, self.last_positions_count)]
+
+        logging.info('Average total estimated Q [LONG, IDLE, SHORT]: {}'
+                     .format([total_q / total_steps for total_q in self.total_estimated_q]))
+        logging.info('Recent estimated Q [LONG, IDLE, SHORT]: {}'.format(new_average_estimated_q))
         logging.info('Total positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(self.positions_count))
-        logging.info('Positions chosen by clara [LONG, IDLE, SHORT] over the last {} steps : {}'
-                     .format(TRAINING_LOGS_FREQUENCY, new_positions_count))
+        logging.info('Positions chosen by clara [LONG, IDLE, SHORT]: {}'.format(new_positions_count))
+
         self.last_positions_count = self.positions_count
 
-        logging.info('Average loss so far: {}'.format(self.total_loss / (total_steps / TRAINING_FREQUENCY)))
+        # DQN loss data logging
         new_loss = self.total_loss - self.last_loss
+
+        logging.info('Average loss so far: {}'.format(self.total_loss / (total_steps / TRAINING_FREQUENCY)))
         logging.info('Average loss over the last {} steps: {}'
                      .format(TRAINING_LOGS_FREQUENCY, new_loss / TRAINING_LOGS_FREQUENCY))
+
         self.last_estimated_q = self.total_estimated_q
+
+        # Exploration data logging
         logging.info('Epsilon: {}\n'.format(self.epsilon))
 
     @staticmethod
@@ -253,10 +274,10 @@ class AgentTrainer(object):
         logging.info('New training session starting')
         logging.info('Layers: {}, Pre Train Steps: {}, Memory Size: {}, Training Batch size: {}; Training Frequency {}, '
                      'Target Update Frequency: {}, Discount Rate {}, Learning Rate: {}, Start eps: {}, End eps: {}, '
-                     'Annealing Steps: {}, Gradient Clip: {}, Lrelu Alpha: {}'
+                     'Annealing Steps: {}, Gradient Clip: {}, Lrelu Alpha: {}, Logging frequency: {}'
                      .format(LAYERS_SIZES, PRE_TRAIN_STEPS, MEMORY_SIZE, TRAINING_BATCH_SIZE, TRAINING_FREQUENCY,
                              TARGET_UPDATE_FREQUENCY, DISCOUNT_RATE, LEARNING_RATE, START_EPS, END_EPS, ANNEALING_STEPS,
-                             DQN.GRADIENT_CLIP, DQN.LRELU_ALPHA))
+                             DQN.GRADIENT_CLIP, DQN.LRELU_ALPHA, TRAINING_LOGS_FREQUENCY))
 
     @staticmethod
     def summarize_vector(vector):
