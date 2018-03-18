@@ -46,8 +46,10 @@ class Environment(object):
         logging.info('Starting training from {}'.format(self.current_timespan))
 
         # data needed for logging
-        self.average_trade_profitability = 0
-        self.trades_so_far = 0
+        self.successful_trades = 0
+        self.failed_trades = 0
+        self.total_profit = 0
+        self.total_loss = 0
         self.timespan_of_last_entry = None
 
     def __enter__(self):
@@ -91,10 +93,13 @@ class Environment(object):
             total_fee = (total_percentage_owned / 100) * self.exchange_transaction_fee
             reward -= total_fee
 
-            self.trades_so_far += 1
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
-            distance_from_average = trade_profitability - self.average_trade_profitability
-            self.average_trade_profitability += distance_from_average / self.trades_so_far
+            if trade_profitability < 0:
+                self.failed_trades += 1
+                self.total_loss += trade_profitability
+            else:
+                self.successful_trades += 1
+                self.total_profit += trade_profitability
 
         if current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
