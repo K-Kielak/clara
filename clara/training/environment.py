@@ -41,6 +41,8 @@ class Environment(object):
         # data needed for logging
         self.successful_trades = 0
         self.failed_trades = 0
+        self.successful_trades_length = 0
+        self.failed_trades_length = 0
         self.total_profit = 0
         self.total_loss = 0
         self.timespan_of_last_entry = None
@@ -55,9 +57,6 @@ class Environment(object):
         current_state = self.loaded_market_data[0]
         ticks = current_state[TICKS_LABEL]
         ema = current_state[EMA_LABEL]
-        if ema > 10**3:
-            ema /= 10**8
-
         state_vector = [ema]
         for t in ticks:
             state_vector.extend(t.values())
@@ -88,11 +87,14 @@ class Environment(object):
             reward -= total_fee
 
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
+            trade_length = self.loaded_market_data[0][TIMESPAN_LABEL] - self.timespan_of_last_entry
             if trade_profitability < 0:
                 self.failed_trades += 1
+                self.failed_trades_length += trade_length.seconds // 60
                 self.total_loss -= trade_profitability
             else:
                 self.successful_trades += 1
+                self.successful_trades_length += trade_length.seconds // 60
                 self.total_profit += trade_profitability
 
         if self.current_agent_position.enters_trade(new_agent_position):
@@ -134,8 +136,6 @@ class Environment(object):
     def _get_current_price(self):
         current_state = self.loaded_market_data[0]
         ema = current_state[EMA_LABEL]
-        if ema > 10**3:
-            ema /= 10**8
         current_tick = current_state[TICKS_LABEL][-1]
         current_price = current_tick[CLOSE_LABEL]
         current_price = ema*(current_price + 100)

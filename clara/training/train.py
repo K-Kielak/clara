@@ -33,7 +33,7 @@ LAYERS_SIZES = [600, 400]
 
 # Training hyperparameters
 MEMORY_SIZE = 50000  # How many experiences to keep in the memory; 250000 ~= 4GB
-PRE_TRAIN_STEPS = 25000  # How many steps before training begins, it should be at least TRAINING_BATCH_SIZE
+PRE_TRAIN_STEPS = 2000  # How many steps before training begins, it should be at least TRAINING_BATCH_SIZE
 TRAINING_BATCH_SIZE = 50  # How many experiences to use for each training step
 TRAINING_FREQUENCY = 5  # How many actions before performing one training step
 NUM_STEPS = 8000000  # How many steps to perform for training session
@@ -92,6 +92,8 @@ class AgentTrainer(object):
         self.last_total_reward = 0
         self.last_successful_trades = 0
         self.last_failed_trades = 0
+        self.last_successful_trades_length = 0
+        self.last_failed_trades_length = 0
         self.last_total_profit = 0
         self.last_total_loss = 0
         self.total_estimated_q = [0, 0, 0]
@@ -211,13 +213,15 @@ class AgentTrainer(object):
         logging.info('Total reward so far: {}'.format(self.total_reward))
         logging.info('Average total reward: {}'.format(self.total_reward / total_steps))
         logging.info('Recent reward: {}'.format(new_reward))
-        logging.info('Average recent reward: {}'.format(TRAINING_LOGS_FREQUENCY, new_reward / TRAINING_LOGS_FREQUENCY))
+        logging.info('Average recent reward: {}'.format(new_reward / TRAINING_LOGS_FREQUENCY))
 
         self.last_total_reward = self.total_reward
 
         # Trades data logging
         new_successful_trades = self.environment.successful_trades - self.last_successful_trades
         new_failed_trades = self.environment.failed_trades - self.last_failed_trades
+        new_successful_trades_length = self.environment.successful_trades_length - self.last_successful_trades_length
+        new_failed_trades_length = self.environment.failed_trades_length - self.last_failed_trades_length
         new_total_profit = self.environment.total_profit - self.last_total_profit
         new_total_loss = self.environment.total_loss - self.last_total_loss
         total_profitability = self.environment.total_profit - self.environment.total_loss
@@ -229,8 +233,13 @@ class AgentTrainer(object):
 
         logging.info('Trades so far (Successful, Failed): ({}, {})'
                      .format(self.environment.successful_trades, self.environment.failed_trades))
-        logging.info('Recent trades (Successful, Failed): ({}, {})'
-                     .format(new_successful_trades, new_failed_trades))
+        logging.info('Average trades length (Successful, Failed): ({}, {})'
+                     .format(self.environment.successful_trades_length / self.environment.successful_trades,
+                             self.environment.failed_trades_length / self.environment.failed_trades))
+        logging.info('Recent trades (Successful, Failed): ({}, {})'.format(new_successful_trades, new_failed_trades))
+        logging.info('Recent average trades length (Successful, Failed): ({}, {})'
+                     .format(new_successful_trades_length / new_successful_trades,
+                             new_failed_trades_length / new_failed_trades))
         logging.info('Average (Profit, Loss): ({}, {})'
                      .format(self.environment.total_profit / self.environment.successful_trades,
                              self.environment.total_loss / self.environment.failed_trades))
@@ -241,6 +250,8 @@ class AgentTrainer(object):
 
         self.last_successful_trades = self.environment.successful_trades
         self.last_failed_trades = self.environment.failed_trades
+        self.last_successful_trades_length = self.environment.successful_trades_length
+        self.last_failed_trades_length = self.environment.failed_trades_length
         self.last_total_profit = self.environment.total_profit
         self.last_total_loss = self.environment.total_loss
 
