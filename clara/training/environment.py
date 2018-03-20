@@ -31,13 +31,11 @@ class Environment(object):
         self.loaded_market_data = {}
         self.current_agent_positions = {}
         self.coin_prices_at_last_entry = {}
-        self.test_start_timespans = {}
-        self.is_test = {}
+        self.is_test = False
+        self.test_start_timespan = self._get_latest_timespan() - timedelta(minutes=Environment.TESTING_MINUTES)
         for market in self.tick_types:
             self.loaded_market_data[market] = deque()
             self.current_agent_positions[market] = Position.IDLE
-            self.test_start_timespans[market] = self._get_test_start_timespan(market)
-            self.is_test[market] = False
             self._update_market_data_batch(market)
             self.coin_prices_at_last_entry[market] = self._get_current_price(market)
 
@@ -69,7 +67,7 @@ class Environment(object):
             state_vector.extend(t.values())
 
         state_vector.extend(self.current_agent_positions[self.current_market].value)
-        return state_vector, self.is_test[self.current_market]
+        return state_vector, self.is_test
 
     def make_action(self, new_agent_position, trade_writer=None):
         current_agent_position = self.current_agent_positions[self.current_market]
@@ -114,9 +112,9 @@ class Environment(object):
         # update agent and the market ###
         self.current_agent_positions[self.current_market] = new_agent_position
         self.loaded_market_data[self.current_market].popleft()
-        if not self.is_test[self.current_market] and self.current_timespan > self.test_start_timespans[self.current_market]:
-            logging.info('Starting tests on {}'.format(self.current_market))
-            self.is_test[self.current_market] = True
+        if not self.is_test and self.current_timespan > self.test_start_timespan:
+            logging.info('Starting tests at {}'.format(self.current_timespan))
+            self.is_test = True
 
         previous_coin_price = current_coin_price
         current_coin_price = self._get_current_price(self.current_market)
@@ -189,6 +187,7 @@ class Environment(object):
             self._update_market_data_batch(market)
 
         self.current_timespan = self._get_earliest_timespan()
+        self.is_test = False
         self.current_agent_positions = {market: Position.IDLE for market in self.tick_types}
         self._change_market()
 
@@ -196,6 +195,9 @@ class Environment(object):
 
     def _get_earliest_timespan(self):
         return min([market[0][TIMESPAN_LABEL] for market in self.loaded_market_data.values()])
+
+    def _get_latest_timespan(self):
+        return max(self.dao.get_latest_state_timespan(tick_type) for tick_type in self.tick_types)
 
     def _get_test_start_timespan(self, market):
         latest_market_timespan = self.dao.get_latest_state_timespan(market)
