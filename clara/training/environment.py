@@ -48,6 +48,8 @@ class Environment(object):
         # data needed for logging
         self.successful_trades = 0
         self.failed_trades = 0
+        self.successful_trades_length = 0
+        self.failed_trades_length = 0
         self.total_profit = 0
         self.total_loss = 0
         self.timespan_of_last_entry = None
@@ -94,16 +96,20 @@ class Environment(object):
             reward -= total_fee
 
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
+            trade_length = self.current_timespan - self.timespan_of_last_entry
             if trade_profitability < 0:
                 self.failed_trades += 1
+                self.failed_trades_length += trade_length.seconds // 60
                 self.total_loss -= trade_profitability
             else:
                 self.successful_trades += 1
+                self.successful_trades_length += trade_length.seconds // 60
                 self.total_profit += trade_profitability
 
         if current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
             self.coin_prices_at_last_entry[self.current_market] = current_coin_price
+            self.timespan_of_last_entry = self.current_timespan
 
         # update agent and the market ###
         self.current_agent_positions[self.current_market] = new_agent_position
