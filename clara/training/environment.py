@@ -13,7 +13,7 @@ class Environment(object):
     TESTING_MINUTES = 5 * 1440  # How many of the last market minutes to use for testing (1 day = 1440 minutes)
     # How many states in the future to load from the database
     # (the higher value the more RAM is required, the lower the slower getting the data will be)
-    MAX_BATCH_SIZE = 25000  # 50000 ~= 0.4GB
+    MAX_BATCH_SIZE = 2000  # 50000 ~= 0.4GB
 
     def __init__(self, market_interval, db_uri, exchange_transaction_fee):
         self.dao = ProcessedDataDAO(db_uri)
@@ -31,6 +31,7 @@ class Environment(object):
         self.loaded_market_data = {}
         self.current_agent_positions = {}
         self.coin_prices_at_last_entry = {}
+        self.timespan_of_last_entry = {}
         self.is_test = False
         self.test_start_timespan = self._get_latest_timespan() - timedelta(minutes=Environment.TESTING_MINUTES)
         for market in self.tick_types:
@@ -38,6 +39,7 @@ class Environment(object):
             self.current_agent_positions[market] = Position.IDLE
             self._update_market_data_batch(market)
             self.coin_prices_at_last_entry[market] = self._get_current_price(market)
+            self.timespan_of_last_entry[market] = None
 
         self.current_timespan = self._get_earliest_timespan()
         self._change_market()
@@ -50,7 +52,6 @@ class Environment(object):
         self.failed_trades_length = 0
         self.total_profit = 0
         self.total_loss = 0
-        self.timespan_of_last_entry = None
 
     def __enter__(self):
         return self
@@ -94,7 +95,7 @@ class Environment(object):
             reward -= total_fee
 
             trade_profitability = total_percentage_owned - 100 - total_fee - self.exchange_transaction_fee
-            trade_length = self.current_timespan - self.timespan_of_last_entry
+            trade_length = self.current_timespan - self.timespan_of_last_entry[self.current_market]
             if trade_profitability < 0:
                 self.failed_trades += 1
                 self.failed_trades_length += trade_length.seconds // 60
@@ -107,7 +108,7 @@ class Environment(object):
         if current_agent_position.enters_trade(new_agent_position):
             reward -= self.exchange_transaction_fee
             self.coin_prices_at_last_entry[self.current_market] = current_coin_price
-            self.timespan_of_last_entry = self.current_timespan
+            self.timespan_of_last_entry[self.current_market] = self.current_timespan
 
         # update agent and the market ###
         self.current_agent_positions[self.current_market] = new_agent_position
