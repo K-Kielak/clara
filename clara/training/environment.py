@@ -15,16 +15,15 @@ class Environment(object):
     # (the higher value the more RAM is required, the lower the slower getting the data will be)
     MAX_BATCH_SIZE = 25000  # 50000 ~= 0.4GB
 
-    def __init__(self, market_interval, db_uri, exchange_transaction_fee):
+    def __init__(self, markets, interval, db_uri, exchange_transaction_fee):
         self.dao = ProcessedDataDAO(db_uri)
         try:
-            self.interval_value = Interval[market_interval].value
+            self.interval_value = Interval[interval].value
         except KeyError:
-            raise InvalidTicksException('Invalid ticks interval: {}'.format(market_interval))
-        self.tick_types = self.dao.get_all_tick_types_for_interval(market_interval)
+            raise InvalidTicksException('Invalid ticks interval: {}'.format(interval))
+        self.tick_types = self.dao.get_existing_tick_types(markets, interval)
         if not self.tick_types:
-            raise ValueError('There are no states for given market_interval ({}) '
-                             'in the database'.format(market_interval))
+            raise ValueError('There are no states for given markets and interval in the database')
         self.current_tick_type_index = 0
         logging.info('starting market is ' + self.tick_types[self.current_tick_type_index])
 

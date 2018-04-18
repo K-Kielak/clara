@@ -84,6 +84,7 @@ class ProcessedDataDAO(object):
         return db_response.next()[TIMESPAN_LABEL]
 
     @retry(AutoReconnect, tries=5, delay=1, backoff=2)
-    def get_all_tick_types_for_interval(self, interval):
-        collection_names = self.database.collection_names()
-        return [name for name in collection_names if interval in name]
+    def get_existing_tick_types(self, markets, interval):
+        existing_tick_types = self.database.collection_names()
+        tick_types = [interval + market for market in markets if (interval + market in existing_tick_types)]
+        return tick_types

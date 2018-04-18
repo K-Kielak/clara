@@ -4,6 +4,7 @@ import os
 import random
 import sys
 import tensorflow as tf
+from bittrex.daos.bittrex_dao import BittrexDAO
 from clara.agent.position import Position
 from clara.agent.deep_q_network import DQN
 from clara.agent.experience_memory import Memory
@@ -50,10 +51,18 @@ EXCHANGE_TRANSACTION_FEE = 0.1  # in percentage from transaction, e.g. 0.1 means
 MARKET_INTERVAL = 'oneMin'  # On what type of market interval should agent be trained
 # os env variable containing URI of database containing the preprocessed data for the simulation environment
 STATES_DB_URI_ENV = 'STATES_DATA_DB_URI'
+# os env variable containing URI of database containing data about markets data we gather
+MARKETS_DB_URI_ENV = 'BITTREX_DATA_DB_URI'
+# collection from the forementioned database where names of markets that will be used for training are stored
+MARKETS_COLLECTION = 'allMarkets'
 
 if STATES_DB_URI_ENV not in os.environ:
     raise EnvironmentError('States Data Database URI is not set under {}, '
                            'please set it before running the script again'.format(STATES_DB_URI_ENV))
+
+if MARKETS_DB_URI_ENV not in os.environ:
+    raise EnvironmentError('Bittrex Database URI is not set under {}, '
+                           'please set it before running the script again'.format(MARKETS_DB_URI_ENV))
 
 
 class AgentTrainer(object):
@@ -62,8 +71,12 @@ class AgentTrainer(object):
         self.experience_memory = Memory(MEMORY_SIZE)
         logging.info('Agent initialized')
 
+        bittrex_db_uri = os.environ[MARKETS_DB_URI_ENV]
+        bittrex_dao = BittrexDAO(bittrex_db_uri)
+        markets = bittrex_dao.get_market_names(MARKETS_COLLECTION)
+
         states_db_uri = os.environ[STATES_DB_URI_ENV]
-        self.environment = Environment(MARKET_INTERVAL, states_db_uri, EXCHANGE_TRANSACTION_FEE)
+        self.environment = Environment(markets, MARKET_INTERVAL, states_db_uri, EXCHANGE_TRANSACTION_FEE)
         logging.info('Environment initialized')
 
         self.saver = tf.train.Saver()
